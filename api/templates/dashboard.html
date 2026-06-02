@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Job Salary Portal{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<h1>Dashboard analityczny</h1>
+<div class="btn-row">
+  <button type="button" class="btn-secondary" onclick="loadDashboard()">Odswiez wykresy</button>
+  <a class="btn-secondary" href="{{ mlflow_url }}" target="_blank" rel="noopener">MLflow</a>
+  <a class="btn-secondary" href="{{ prefect_ui_url }}" target="_blank" rel="noopener" title="Wymaga: prefect server start">Prefect UI</a>
+  <a class="btn-secondary" href="/docs/etl">Uruchom ETL</a>
+</div>
+<p id="data-source" class="muted">Ladowanie danych...</p>
+<div class="progress-wrap" id="dash-progress" style="display:none">
+  <div class="progress-bar" id="dash-progress-bar"></div>
+</div>
+<div class="chart-row">
+  <div class="chart-box"><canvas id="chartLocation"></canvas></div>
+  <div class="chart-box"><canvas id="chartEducation"></canvas></div>
+</div>
+<div class="chart-row">
+  <div class="chart-box"><canvas id="chartRemote"></canvas></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}

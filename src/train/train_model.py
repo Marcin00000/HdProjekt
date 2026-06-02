@@ -23,6 +23,7 @@ from src.mlflow_config import (
     configure_mlflow,
     ensure_experiment,
 )
+from src.portal.job_context import log, progress
 from src.train.features import build_preprocessor, prepare_train_test
 
 MODELS_DIR = PROJECT_ROOT / "models"
@@ -134,6 +135,7 @@ def train_xgboost(
 ) -> dict[str, Any]:
     """Trenuje model; opcjonalnie przeszukuje siatke hiperparametrow z params.yaml."""
     params = params or load_params()
+    progress(2, "Przygotowanie danych treningowych...")
     configure_mlflow()
     ensure_experiment()
     mlflow.set_experiment(EXPERIMENT_NAME)
@@ -155,21 +157,24 @@ def train_xgboost(
     if use_tuning:
         grid = tuning_cfg.get("param_grid") or {}
         combinations = _iter_param_grid(grid)
-        print(f"Tuning: {len(combinations)} kombinacji hiperparametrow")
+        log(f"Tuning: {len(combinations)} kombinacji hiperparametrow")
     else:
         combinations = [{k: params[k] for k in XGB_PARAM_KEYS if k in params}]
 
     best: dict[str, Any] = {"rmse": float("inf")}
     runs_summary: list[dict[str, Any]] = []
+    total = len(combinations)
 
-    for hyperparams in combinations:
+    for idx, hyperparams in enumerate(combinations, start=1):
+        pct = int(10 + (idx - 1) / max(total, 1) * 80)
+        progress(pct, f"Kombinacja {idx}/{total}...")
         preproc = build_preprocessor()
         model, metrics, run_id, model_uri = _fit_and_log_run(
             X_train, X_test, y_train, y_test, hyperparams, defaults, preproc
         )
         entry = {"run_id": run_id, "model_uri": model_uri, **hyperparams, **metrics}
         runs_summary.append(entry)
-        print(
+        log(
             f"  n={hyperparams.get('n_estimators')} depth={hyperparams.get('max_depth')} "
             f"lr={hyperparams.get('learning_rate')} -> "
             f"RMSE={metrics['rmse']:,.0f} ({metrics['rmse_pct_of_mean']:.1f}% sredniej) "
@@ -187,6 +192,7 @@ def train_xgboost(
                 "rmse": metrics["rmse"],
             }
 
+    progress(92, "Zapis modelu...")
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(best["preprocessor"], MODELS_DIR / "preprocessor.joblib")
     joblib.dump(best["model"], MODELS_DIR / "xgboost_model.joblib")
@@ -210,6 +216,7 @@ def train_xgboost(
         try:
             mlflow.register_model(best["model_uri"], REGISTERED_MODEL_NAME)
         except Exception as exc:
-            print(f"  UWAGA: rejestracja modelu w MLflow nie powiodla sie: {exc}")
+            log(f"  UWAGA: rejestracja modelu w MLflow nie powiodla sie: {exc}")
 
+    progress(100, "Trening zakonczony.")
     return bundle

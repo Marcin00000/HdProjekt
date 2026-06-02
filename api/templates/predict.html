@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Prognoza pensji{% endblock %}
+{% block content %}
+<h1>Prognoza pensji</h1>
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+{% if warning %}
+<div class="alert alert-warn">{{ warning }}</div>
+{% endif %}
+{% if result is not none %}
+<div class="alert alert-success">
+  Prognozowana pensja roczna: <strong>${{ "{:,.0f}".format(result) }}</strong> USD
+</div>
+{% endif %}
+<form method="post" action="/predict/form" class="predict-form" id="predict-form">
+  <label>Stanowisko
+    <input name="job_title" list="job_title-list" value="Data Scientist" required autocomplete="off">
+    <datalist id="job_title-list">
+      {% for v in options.job_title %}<option value="{{ v }}">{% endfor %}
+    </datalist>
+  </label>
+  <label>Lata doswiadczenia
+    <input name="experience_years" type="number" min="0" max="40" value="5" required>
+  </label>
+  <label>Wyksztalcenie
+    <select name="education_level" required>
+      {% for v in options.education_level %}
+      <option{% if v == 'Master' %} selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Liczba umiejetnosci
+    <input name="skills_count" type="number" min="0" value="10" required>
+  </label>
+  <label>Branza
+    <select name="industry" required>
+      {% for v in options.industry %}
+      <option{% if v == 'Technology' %} selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Wielkosc firmy
+    <select name="company_size" required>
+      {% for v in options.company_size %}
+      <option{% if v == 'Medium' %} selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Lokalizacja
+    <select name="location" required>
+      {% for v in options.location %}
+      <option{% if v == 'USA' %} selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Praca zdalna
+    <select name="remote_work" required>
+      {% for v in options.remote_work %}
+      <option{% if v == 'Yes' %} selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Certyfikaty
+    <input name="certifications" type="number" min="0" value="2" required>
+  </label>
+  <button type="submit">Oblicz prognoze</button>
+</form>
+<p class="muted">Wartosci list z danych treningowych ({{ options.source }}). REST: <code>POST /predict</code></p>
+{% endblock %}

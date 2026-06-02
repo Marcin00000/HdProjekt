@@ -35,7 +35,7 @@ flowchart LR
 
 - **Medallion:** `raw/` → `silver/` → `gold/`
 - **Hurtownia:** schemat gwiazdy w Azure SQL
-- **ML:** XGBoost, eksperymenty w **lokalnym MLflow** (`./mlruns`)
+- **ML:** XGBoost, eksperymenty w **lokalnym MLflow** (`data/mlflow/`)
 - **Wersjonowanie artefaktów:** DVC → Azure (`dvc-artifacts/`)
 
 ## Wymagania wstępne
@@ -78,11 +78,12 @@ python scripts/run_phase2.py
 python scripts/run_phase3.py
 python scripts/run_phase4.py
 python scripts/run_phase5.py --fast
-python scripts/run_phase6.py --serve   # API :8000
+python scripts/run_phase6.py --serve   # REST API :8000
+python scripts/run_phase7.py           # portal web (dashboard, prognoza, docs)
 python scripts/run_mlflow_ui.py        # MLflow :5000
 ```
 
-DVC: [docs/dvc-pipeline.md](docs/dvc-pipeline.md) · API (faza 6): [docs/api.md](docs/api.md) · Prefect: [docs/prefect-etl.md](docs/prefect-etl.md)
+DVC: [docs/dvc-pipeline.md](docs/dvc-pipeline.md) · portal/Docker: [docs/portal-docker.md](docs/portal-docker.md) · API: [docs/api.md](docs/api.md) · Prefect: [docs/prefect-etl.md](docs/prefect-etl.md)
 
 ## Struktura katalogów
 
@@ -111,10 +112,10 @@ Po ukończeniu projektu możesz **bez zmiany kodu biznesowego** przetestować:
 | Element | Status | Dowód (po implementacji) |
 |---------|--------|---------------------------|
 | Repozytorium Git + README | częściowo | ten plik |
-| Azure SQL + dashboard | planowane | portal `/dashboard`, `src/etl/load_dwh.py` |
+| Azure SQL + dashboard | tak | portal `/dashboard`, `src/etl/load_dwh.py` |
 | Pipeline ETL (Prefect) | planowane | `src/etl/flows.py` |
 | Model + ewaluacja | planowane | XGBoost + MLflow |
-| MLflow + DVC + API | częściowo | `data/mlflow/`, `dvc.yaml`, `api/` |
+| MLflow + DVC + API + portal | tak | `data/mlflow/`, `dvc.yaml`, `api/`, `docker compose` |
 | Monitoring (Evidently) | planowane | `src/monitoring/` |
 | CI/CD lub retraining | planowane | `.github/workflows/` lub Prefect cron |
 

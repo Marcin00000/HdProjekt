@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Strona glowna — Job Salary Portal{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Portal analityczny i ML</h1>
+  <p>Hurtownia danych Azure SQL, pipeline DVC, trening XGBoost w MLflow oraz prognoza pensji.</p>
+</section>
+<div class="card-grid">
+  <a class="card" href="/dashboard">
+    <h2>Dashboard</h2>
+    <p>Wykresy z hurtowni (lokalizacja, wyksztalcenie, praca zdalna).</p>
+  </a>
+  <a class="card" href="/predict">
+    <h2>Prognoza pensji</h2>
+    <p>Formularz webowy — ten sam model co endpoint <code>POST /predict</code>.</p>
+  </a>
+  <a class="card" href="/mlflow" target="_blank" rel="noopener">
+    <h2>MLflow UI</h2>
+    <p>Eksperymenty, metryki RMSE/MAE/R², rejestr modeli.</p>
+  </a>
+  <a class="card" href="/docs/training">
+    <h2>Trening ML</h2>
+    <p>Uruchom XGBoost + MLflow, przeladuj model w API.</p>
+  </a>
+  <a class="card" href="/docs/dvc">
+    <h2>Pipeline DVC</h2>
+    <p>dvc repro, push na Azure remote — z przegladarki.</p>
+  </a>
+  <a class="card" href="/docs/etl">
+    <h2>ETL / Prefect</h2>
+    <p>Uruchom przygotowanie danych, zaladuj SQL, pelny flow Prefect.</p>
+  </a>
+</div>
+<section class="info-box">
+  <h3>Produkcja (Docker)</h3>
+  <pre>docker compose up --build</pre>
+  <p>Portal: <code>http://localhost:8080</code> &middot; MLflow: <code>{{ mlflow_url }}</code></p>
+</section>
+{% endblock %}

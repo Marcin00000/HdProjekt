@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Pipeline DVC{% endblock %}
+{% block content %}
+<h1>Pipeline DVC</h1>
+<p>Etapy: <code>prepare</code> → <code>train</code> (plik <code>dvc.yaml</code>). Wersjonowanie artefaktow na Azure remote.</p>
+
+<section class="status-grid">
+  <div class="status-item">CSV: {% if paths.raw_csv %}<span class="ok">tak</span>{% else %}<span class="warn">brak</span>{% endif %}</div>
+  <div class="status-item">Metryki DVC: {% if dvc_metrics %}<span class="ok">tak</span>{% else %}<span class="warn">uruchom repro</span>{% endif %}</div>
+</section>
+
+<section class="ops-panel">
+  <h2>Operacje DVC</h2>
+  <div class="progress-wrap">
+    <div class="progress-bar" id="job-progress-bar" style="width:0%"></div>
+  </div>
+  <div id="job-status" class="job-status muted">Gotowy</div>
+  <pre id="job-log" class="job-log">Kliknij przycisk aby uruchomic pipeline DVC.</pre>
+  <div class="btn-row">
+    <button type="button" class="btn-primary" data-job="dvc_repro">dvc repro (pelny)</button>
+    <button type="button" class="btn-secondary" data-job="dvc_repro_fast">dvc repro (szybki)</button>
+    <button type="button" class="btn-secondary" data-job="dvc_repro_push">repro + push Azure</button>
+    <button type="button" class="btn-secondary" data-job="dvc_push">tylko dvc push</button>
+  </div>
+</section>
+
+{% if dvc_metrics %}
+<section class="info-box">
+  <h2>Metryki DVC</h2>
+  <ul>
+    {% for k, v in dvc_metrics.items() %}
+    <li><strong>{{ k }}</strong>: {{ v }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% if phase5_text %}
+<section class="info-box">
+  <h2>Ostatni run z portalu</h2>
+  <pre>{{ phase5_text }}</pre>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/operations.js"></script>
+{% endblock %}

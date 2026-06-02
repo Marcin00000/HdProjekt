@@ -6,7 +6,7 @@ vars:
 
 stages:
   prepare:
-    cmd: .\.venv\Scripts\python.exe scripts/dvc_prepare.py
+    cmd: python scripts/dvc_prepare.py
     deps:
       - scripts/dvc_prepare.py
       - src/dvc/pipeline_stages.py
@@ -23,7 +23,7 @@ stages:
       - data/processed/cleaned.parquet
 
   train:
-    cmd: .\.venv\Scripts\python.exe scripts/dvc_train.py
+    cmd: python scripts/dvc_train.py
     deps:
       - scripts/dvc_train.py
       - src/dvc/pipeline_stages.py

@@ -112,16 +112,18 @@ def reset_mlflow_data() -> list[str]:
     return removed
 
 
-def mlflow_ui_command(port: int = 5000) -> list[str]:
+def mlflow_ui_command(port: int = 5000, host: str = "127.0.0.1") -> list[str]:
     import sys
 
     configure_mlflow()
     uri = get_tracking_uri()
-    return [
+    cmd = [
         sys.executable,
         "-m",
         "mlflow",
         "ui",
+        "--host",
+        host,
         "--port",
         str(port),
         "--backend-store-uri",
@@ -132,3 +134,6 @@ def mlflow_ui_command(port: int = 5000) -> list[str]:
         get_artifact_root_uri(),
         "--serve-artifacts",
     ]
+    if host == "0.0.0.0":
+        cmd.extend(["--allowed-hosts", "*", "--cors-allowed-origins", "*"])
+    return cmd

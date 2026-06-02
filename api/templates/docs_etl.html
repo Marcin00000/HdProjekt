@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}ETL i hurtownia{% endblock %}
+{% block content %}
+<h1>ETL — przygotowanie danych i hurtownia</h1>
+<p class="muted">
+  <strong>Prefect ETL (pelny)</strong> = synchroniczny pipeline (silver, gold, SQL).
+  W Dockerze bez sterownika ODBC uzyj <strong>ETL bez SQL</strong>.
+  <a href="{{ prefect_ui_url }}" target="_blank">Prefect UI</a> (opcjonalnie: <code>prefect server start</code>).
+</p>
+
+<section class="status-grid">
+  <div class="status-item">CSV raw: {% if paths.raw_csv %}<span class="ok">tak</span>{% else %}<span class="warn">brak</span>{% endif %}</div>
+  <div class="status-item">Silver: {% if paths.silver %}<span class="ok">tak</span>{% else %}<span class="warn">brak</span>{% endif %}</div>
+  <div class="status-item">Gold: {% if paths.gold %}<span class="ok">tak</span>{% else %}<span class="warn">brak</span>{% endif %}</div>
+</section>
+
+<section class="ops-panel">
+  <h2>Operacje</h2>
+  <div class="progress-wrap">
+    <div class="progress-bar" id="job-progress-bar" style="width:0%"></div>
+  </div>
+  <div id="job-status" class="job-status muted">Gotowy</div>
+  <pre id="job-log" class="job-log">Log ETL pojawi sie tutaj.</pre>
+  <div class="btn-row">
+    <button type="button" class="btn-primary" data-job="prepare">1. Przygotuj dane (lokalnie)</button>
+    <button type="button" class="btn-secondary" data-job="prepare_lake">+ Azure Lake</button>
+    <button type="button" class="btn-secondary" data-job="load_dwh">2. Hurtownia SQL</button>
+  </div>
+  <div class="btn-row">
+    <button type="button" class="btn-primary" data-job="etl">3. ETL pelny (z SQL)</button>
+    <button type="button" class="btn-secondary" data-job="etl_skip_sql">ETL bez SQL (Docker)</button>
+  </div>
+</section>
+
+{% if phase3_text %}
+<section class="info-box"><h2>Ostatni ETL</h2><pre>{{ phase3_text }}</pre></section>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/operations.js"></script>
+{% endblock %}

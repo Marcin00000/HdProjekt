@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Job Salary Portal{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="/" class="logo">Job Salary DWH</a>
+      <nav>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/predict">Prognoza</a>
+        <a href="/docs/etl">ETL</a>
+        <a href="/docs/training">Trening</a>
+        <a href="/docs/dvc">DVC</a>
+        <a href="/mlflow" target="_blank" rel="noopener">MLflow</a>
+        <a href="/docs">API</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <div class="container">
+      Model: {% if model_loaded %}<span class="ok">zaladowany</span>{% else %}<span class="warn">brak</span>{% endif %}
+      &middot; <a href="/health">/health</a>
+    </div>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
