@@ -1,0 +1,7 @@
+python-dotenv>=1.0.0
+pandas>=2.0.0
+pyarrow>=14.0.0
+fsspec>=2024.2.0
+adlfs>=2024.2.0
+sqlalchemy>=2.0.0
+pyodbc>=5.0.0

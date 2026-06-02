@@ -1,0 +1,28 @@
+# Sekrety i środowisko lokalne
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+
+# Dane i artefakty ML
+data/cache/
+mlruns/
+.dvc/cache/
+
+# IDE / OS
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+
+reports/
+.cursor
+.cursorignore
+job_salary_prediction_dataset.csv
