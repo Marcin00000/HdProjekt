@@ -11,12 +11,33 @@ __pycache__/
 venv/
 env/
 
-# Dane i artefakty ML
-data/cache/
-mlruns/
+# DVC — cache i poświadczenia (nigdy w Git)
 .dvc/cache/
+.dvc/tmp/
+.dvc/config.local
 
-# IDE / OS
+# Dane — surowe, przetworzone, duże pliki
+job_salary_prediction_dataset.csv
+data/**/*.csv
+data/**/*.parquet
+data/cache/
+data/processed/
+data/dwh/
+!data/.gitkeep
+
+# MLflow / raporty / notebooki
+data/mlflow/
+mlruns/
+mlartifacts/
+_mlflow_legacy_registry/
+mlflow.db
+mlflow.db-*
+models/
+reports/
+notebooks/.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# IDE / OS / Cursor
 .idea/
 .vscode/
 Thumbs.db
@@ -25,4 +46,12 @@ Thumbs.db
 reports/
 .cursor
 .cursorignore
-job_salary_prediction_dataset.csv
+
+# Dziennik faz (dokumentacja lokalna)
+DZIENNIK_FAZ.md
+
+# Prefect (lokalny serwer / cache)
+.prefect/
+prefect.db
+.prefectignore
+.venv

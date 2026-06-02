@@ -1,0 +1,29 @@
+# Mapowanie kolumn źródłowych CSV → warstwy lake / hurtownia
+# Źródło: job_salary_prediction_dataset.csv (~250 000 wierszy)
+
+source:
+  format: csv
+  path_local: job_salary_prediction_dataset.csv
+  path_lake_raw: raw/job_salary_prediction_dataset.csv
+
+columns:
+  job_title: { type: string, role: dimension_job }
+  experience_years: { type: int, role: feature }
+  education_level: { type: string, role: feature }
+  skills_count: { type: int, role: feature }
+  industry: { type: string, role: dimension_company }
+  company_size: { type: string, role: dimension_company }
+  location: { type: string, role: feature }
+  remote_work: { type: string, role: feature }
+  certifications: { type: int, role: feature }
+  salary: { type: float, role: target }
+
+target_column: salary
+
+# Uwaga: brak daty w źródle — dim_time w SQL (faza 2) użyje daty partycji ETL
+dwh:
+  fact_table: fact_salaries
+  dimensions:
+    - dim_job
+    - dim_company
+    - dim_time

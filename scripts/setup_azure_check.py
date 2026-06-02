@@ -121,7 +121,7 @@ def check_sql() -> bool:
         engine = create_engine(url)
         with engine.connect() as conn:
             row = conn.execute(text("SELECT 1 AS ok")).fetchone()
-        print(f"  OK — połączenie SQL (SELECT 1 → {row[0]})")
+        print(f"  OK — polaczenie SQL (SELECT 1 -> {row[0]})")
         return True
     except Exception as exc:
         print(f"  BŁĄD połączenia: {exc}")
