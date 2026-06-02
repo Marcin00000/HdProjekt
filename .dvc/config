@@ -1,4 +1,5 @@
 [core]
     remote = azure_remote
+    no_scm = true
 ['remote "azure_remote"']
     url = azure://job-data/dvc-artifacts

@@ -128,11 +128,17 @@ main { padding: 2rem 0 3rem; min-height: 60vh; }
   border: 1px solid #2a3548;
   border-radius: 6px;
   padding: 0.75rem;
-  max-height: 220px;
+  min-height: 120px;
+  max-height: 360px;
   overflow: auto;
   font-size: 0.8rem;
+  line-height: 1.45;
   white-space: pre-wrap;
   margin-top: 0.75rem;
+}
+.job-log.job-log-idle {
+  color: var(--muted);
+  font-style: italic;
 }
 .job-log-error { border-color: var(--err); }
 .job-status { margin-top: 0.5rem; }
@@ -149,17 +155,54 @@ main { padding: 2rem 0 3rem; min-height: 60vh; }
   background: linear-gradient(90deg, var(--accent), #60a5fa);
   transition: width 0.4s ease;
 }
+.tuning-panel { margin-top: 1rem; }
 .tuning-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 560px;
+}
+.tuning-fieldset {
+  border: 1px solid #2a3548;
+  border-radius: 8px;
+  padding: 0.75rem 1rem 1rem;
+  margin: 0;
+}
+.tuning-fieldset legend {
+  padding: 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.tuning-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+.tuning-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.tuning-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-family: ui-monospace, Consolas, monospace;
+}
+.tuning-check {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
-  max-width: 480px;
+  cursor: pointer;
 }
 .tuning-form input[type="text"] {
-  padding: 0.4rem;
-  border-radius: 4px;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
   border: 1px solid #2a3548;
   background: var(--bg);
   color: var(--text);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.9rem;
 }
 .alert-warn {
   background: rgba(245, 158, 11, 0.15);

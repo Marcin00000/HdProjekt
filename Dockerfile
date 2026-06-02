@@ -42,8 +42,11 @@ COPY api/ ./api/
 COPY scripts/ ./scripts/
 COPY params.yaml ./
 COPY dvc.yaml ./
+COPY dvc.lock ./
+COPY .dvc/ ./.dvc/
 COPY docker/entrypoint.sh /app/docker/entrypoint.sh
 COPY docker/start_mlflow_background.py /app/docker/start_mlflow_background.py
+COPY docker/start_prefect_background.py /app/docker/start_prefect_background.py
 RUN sed -i 's/\r$//' /app/docker/entrypoint.sh \
     && chmod +x /app/docker/entrypoint.sh
 
@@ -54,7 +57,13 @@ ENV PYTHONPATH=/app
 ENV PORT=8000
 ENV MLFLOW_PORT=5000
 ENV MLFLOW_PUBLIC_URL=http://127.0.0.1:5000
+ENV PREFECT_PORT=4200
+ENV PREFECT_HOST=0.0.0.0
+ENV PREFECT_API_URL=http://127.0.0.1:4200/api
+ENV PREFECT_PUBLIC_URL=http://127.0.0.1:4200
+ENV IN_DOCKER=1
+ENV GIT_PYTHON_REFRESH=quiet
 
-EXPOSE 8000 5000
+EXPOSE 8000 5000 4200
 
 ENTRYPOINT ["/bin/sh", "/app/docker/entrypoint.sh"]

@@ -1,37 +1,57 @@
 {% extends "base.html" %}
 {% block title %}Trening modelu{% endblock %}
 {% block content %}
-<h1>Trening XGBoost + MLflow</h1>
+<h1>Trening modelu (XGBoost + MLflow)</h1>
 
 <section class="status-grid">
-  <div class="status-item">Silver: {% if paths.silver %}<span class="ok">tak</span>{% else %}<span class="warn">wymagany</span>{% endif %}</div>
-  <div class="status-item">Model: {% if paths.model %}<span class="ok">tak</span>{% else %}<span class="warn">brak</span>{% endif %}</div>
+  <div class="status-item">Warstwa silver: {% if paths.silver %}<span class="ok">dostepna</span>{% else %}<span class="warn">wymagana</span>{% endif %}</div>
+  <div class="status-item">Model produkcyjny: {% if paths.model %}<span class="ok">zaladowany</span>{% else %}<span class="warn">brak</span>{% endif %}</div>
 </section>
 
-<section class="ops-panel">
-  <h2>Parametry tuningu</h2>
-  <p class="muted">Wartosci oddzielone przecinkami. Zapis trafia do <code>params.yaml</code>.</p>
+<section class="ops-panel tuning-panel">
+  <h2>Parametry strojenia hiperparametrow</h2>
+  <p class="muted">Siatka wartosci (oddzielone przecinkami). Zapis trafia do pliku <code>params.yaml</code>.</p>
   <form id="tuning-form" class="tuning-form">
-    <label><input type="checkbox" id="tuning-enabled" {% if tuning_enabled %}checked{% endif %}> Tuning wlaczony</label>
-    <label>n_estimators <input id="grid-n" value="{{ grid_n }}"></label>
-    <label>max_depth <input id="grid-d" value="{{ grid_d }}"></label>
-    <label>learning_rate <input id="grid-lr" value="{{ grid_lr }}"></label>
+    <fieldset class="tuning-fieldset">
+      <legend>Ogolne</legend>
+      <label class="tuning-check">
+        <input type="checkbox" id="tuning-enabled" {% if tuning_enabled %}checked{% endif %}>
+        Strojenie wlaczone (GridSearchCV)
+      </label>
+    </fieldset>
+    <fieldset class="tuning-fieldset">
+      <legend>Siatka XGBoost</legend>
+      <div class="tuning-grid">
+        <label>
+          <span class="tuning-label">n_estimators</span>
+          <input id="grid-n" type="text" value="{{ grid_n }}" placeholder="500, 800">
+        </label>
+        <label>
+          <span class="tuning-label">max_depth</span>
+          <input id="grid-d" type="text" value="{{ grid_d }}" placeholder="6, 7, 8">
+        </label>
+        <label>
+          <span class="tuning-label">learning_rate</span>
+          <input id="grid-lr" type="text" value="{{ grid_lr }}" placeholder="0.03, 0.05">
+        </label>
+      </div>
+    </fieldset>
     <button type="submit" class="btn-secondary">Zapisz parametry</button>
   </form>
 </section>
 
 <section class="ops-panel">
-  <h2>Trening</h2>
+  <h2>Uruchomienie treningu</h2>
   <div class="progress-wrap">
     <div class="progress-bar" id="job-progress-bar" style="width:0%"></div>
   </div>
-  <div id="job-status" class="job-status muted">Gotowy</div>
-  <pre id="job-log" class="job-log">Log treningu pojawi sie tutaj.</pre>
+  <div id="job-status" class="job-status muted">Gotowy do uruchomienia</div>
+  <pre id="job-log" class="job-log" data-placeholder="Dziennik treningu — uruchom trening przyciskiem ponizej.">Dziennik treningu — uruchom trening przyciskiem ponizej.</pre>
   <div class="btn-row">
-    <button type="button" class="btn-primary" id="btn-train">Uruchom trening (tuning)</button>
-    <button type="button" class="btn-secondary" id="btn-train-fast">Trening szybki</button>
-    <button type="button" class="btn-secondary" onclick="fetch('/api/model/reload',{method:'POST'}).then(()=>location.reload())">Przeladuj model</button>
-    <a class="btn-secondary" href="/mlflow" target="_blank">MLflow UI</a>
+    <button type="button" class="btn-primary" id="btn-train">Trening z strojeniem</button>
+    <button type="button" class="btn-secondary" id="btn-train-fast">Trening szybki (bez strojenia)</button>
+    <button type="button" class="btn-secondary" onclick="fetch('/api/model/reload',{method:'POST'}).then(()=>location.reload())">Przeladuj model w API</button>
+    <a class="btn-secondary" href="/mlflow" target="_blank" rel="noopener">MLflow UI</a>
   </div>
 </section>
 
@@ -63,9 +83,11 @@ document.getElementById("tuning-form")?.addEventListener("submit", async (e) => 
       learning_rate: parseList(document.getElementById("grid-lr").value, true),
     }),
   });
-  alert("Zapisano params.yaml");
+  alert("Zapisano parametry w params.yaml");
 });
-document.getElementById("btn-train")?.addEventListener("click", () => startJob("train"));
-document.getElementById("btn-train-fast")?.addEventListener("click", () => startJob("train_fast"));
+document.getElementById("btn-train")?.addEventListener("click", () =>
+  startJob("train", {}, { skipReload: false }));
+document.getElementById("btn-train-fast")?.addEventListener("click", () =>
+  startJob("train_fast", {}, { skipReload: false }));
 </script>
 {% endblock %}

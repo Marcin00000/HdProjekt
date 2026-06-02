@@ -11,35 +11,33 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from api.predictor import MODEL_PATH, PREPROCESSOR_PATH, predictor
+from api.predictor import predictor
 from api.schemas import SalaryPredictRequest
-from src.config import PROJECT_ROOT, local_raw_data_path
-from src.portal.data_loader import GOLD_BY_LOCATION, SILVER_PATH
+from src.config import PROJECT_ROOT
+from src.portal.paths_status import get_paths_status
 
 router = APIRouter(tags=["portal"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 
 MLFLOW_PUBLIC_URL = os.getenv("MLFLOW_PUBLIC_URL", "http://127.0.0.1:5000")
-PREFECT_UI_URL = os.getenv("PREFECT_UI_URL", "http://127.0.0.1:4200")
+PREFECT_PUBLIC_URL = os.getenv(
+    "PREFECT_PUBLIC_URL",
+    os.getenv("PREFECT_UI_URL", "http://127.0.0.1:4200"),
+)
 PROCESSED = PROJECT_ROOT / "data" / "processed"
 
 
 def _paths() -> dict[str, bool]:
-    return {
-        "raw_csv": local_raw_data_path().is_file(),
-        "silver": SILVER_PATH.is_file(),
-        "gold": GOLD_BY_LOCATION.is_file(),
-        "preprocessor": PREPROCESSOR_PATH.is_file(),
-        "model": MODEL_PATH.is_file(),
-        "mlflow_db": (PROJECT_ROOT / "data" / "mlflow" / "mlflow.db").is_file(),
-    }
+    paths = get_paths_status()
+    paths["mlflow_db"] = (PROJECT_ROOT / "data" / "mlflow" / "mlflow.db").is_file()
+    return paths
 
 
 def _ctx(request: Request, **extra):
     base = {
         "request": request,
         "mlflow_url": MLFLOW_PUBLIC_URL,
-        "prefect_ui_url": PREFECT_UI_URL,
+        "prefect_ui_url": PREFECT_PUBLIC_URL,
         "model_loaded": predictor.is_loaded,
         "paths": _paths(),
     }
@@ -63,6 +61,16 @@ def dashboard(request: Request):
     return templates.TemplateResponse(request, "dashboard.html", _ctx(request))
 
 
+def _predict_ctx(request: Request, **extra):
+    from src.portal.predict_options import get_predict_field_options
+
+    return _ctx(
+        request,
+        options=get_predict_field_options(),
+        **extra,
+    )
+
+
 @router.get("/predict", response_class=HTMLResponse)
 def predict_page(
     request: Request,
@@ -70,13 +78,10 @@ def predict_page(
     error: str | None = None,
     warning: str | None = None,
 ):
-    from src.portal.predict_options import get_predict_field_options
-
-    options = get_predict_field_options()
     return templates.TemplateResponse(
         request,
         "predict.html",
-        _ctx(request, result=result, error=error, warning=warning, options=options),
+        _predict_ctx(request, result=result, error=error, warning=warning),
     )
 
 
@@ -109,19 +114,24 @@ def predict_form(
         return templates.TemplateResponse(
             request,
             "predict.html",
-            _ctx(request, result=round(salary, 2), error=None, warning=warning),
+            _predict_ctx(request, result=round(salary, 2), error=None, warning=warning),
         )
     except Exception as exc:
         return templates.TemplateResponse(
             request,
             "predict.html",
-            _ctx(request, result=None, error=str(exc)),
+            _predict_ctx(request, result=None, error=str(exc)),
         )
 
 
 @router.get("/mlflow")
 def mlflow_redirect():
     return RedirectResponse(url=MLFLOW_PUBLIC_URL, status_code=302)
+
+
+@router.get("/prefect")
+def prefect_redirect():
+    return RedirectResponse(url=PREFECT_PUBLIC_URL, status_code=302)
 
 
 @router.get("/docs/training", response_class=HTMLResponse)
@@ -154,7 +164,9 @@ def docs_training(request: Request):
 @router.get("/docs/dvc", response_class=HTMLResponse)
 def docs_dvc(request: Request):
     dvc_metrics = _read_json(PROCESSED / "metrics.json")
-    phase5 = _read_json(PROCESSED / "phase5_last_run.json")
+    phase5 = _read_json(PROCESSED / "phase5_pipeline_run.json")
+    if not phase5:
+        phase5 = _read_json(PROCESSED / "phase5_last_run.json")
     phase5_text = json.dumps(phase5, indent=2, ensure_ascii=False) if phase5 else ""
     return templates.TemplateResponse(
         request,

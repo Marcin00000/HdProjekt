@@ -10,10 +10,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from api.dashboard_data import get_dashboard_data
-from api.predictor import MODEL_PATH, PREPROCESSOR_PATH, predictor
+from api.predictor import predictor
 from api.services.job_runner import job_runner
-from src.config import PROJECT_ROOT, local_raw_data_path
-from src.portal.data_loader import GOLD_BY_LOCATION, SILVER_PATH
+from src.config import PROJECT_ROOT
+from src.portal.paths_status import get_paths_status
 from src.portal.operations import JOB_HANDLERS
 from src.portal.params_io import load_params_file, save_tuning_config
 from src.portal.predict_options import get_predict_field_options
@@ -74,22 +74,24 @@ def update_tuning(body: TuningParamsUpdate):
 
 @router.get("/system/status")
 def system_status():
-    raw = local_raw_data_path()
+    paths = get_paths_status()
+    paths["mlflow_db"] = (PROJECT_ROOT / "data" / "mlflow" / "mlflow.db").is_file()
     return {
         "model_loaded": predictor.is_loaded,
         "job_busy": job_runner.is_busy(),
         "prefect_ui_url": PREFECT_UI_URL,
         "mlflow_url": os.getenv("MLFLOW_PUBLIC_URL", "http://127.0.0.1:5000"),
-        "paths": {
-            "raw_csv": raw.is_file(),
-            "silver": SILVER_PATH.is_file(),
-            "gold": GOLD_BY_LOCATION.is_file(),
-            "preprocessor": PREPROCESSOR_PATH.is_file(),
-            "model": MODEL_PATH.is_file(),
-            "mlflow_db": (PROJECT_ROOT / "data" / "mlflow" / "mlflow.db").is_file(),
-        },
+        "paths": paths,
         "available_jobs": list(JOB_HANDLERS.keys()),
     }
+
+
+@router.get("/summaries/etl")
+def etl_summary():
+    path = PROJECT_ROOT / "data" / "processed" / "phase3_metrics.json"
+    if not path.is_file():
+        return {"present": False, "text": ""}
+    return {"present": True, "text": path.read_text(encoding="utf-8")}
 
 
 @router.get("/jobs")

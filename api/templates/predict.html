@@ -15,10 +15,11 @@
 {% endif %}
 <form method="post" action="/predict/form" class="predict-form" id="predict-form">
   <label>Stanowisko
-    <input name="job_title" list="job_title-list" value="Data Scientist" required autocomplete="off">
-    <datalist id="job_title-list">
-      {% for v in options.job_title %}<option value="{{ v }}">{% endfor %}
-    </datalist>
+    <select name="job_title" required>
+      {% for v in options.job_title %}
+      <option{% if v == 'Data Scientist' %} selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
   </label>
   <label>Lata doswiadczenia
     <input name="experience_years" type="number" min="0" max="40" value="5" required>
@@ -66,5 +67,5 @@
   </label>
   <button type="submit">Oblicz prognoze</button>
 </form>
-<p class="muted">Wartosci list z danych treningowych ({{ options.source }}). REST: <code>POST /predict</code></p>
+<p class="muted">Wartosci kategorii z danych treningowych ({{ options.source }}). REST: <code>POST /predict</code></p>
 {% endblock %}

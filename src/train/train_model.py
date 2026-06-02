@@ -154,45 +154,71 @@ def train_xgboost(
     tuning_cfg = params.get("tuning") or {}
     use_tuning = force_tuning if force_tuning is not None else bool(tuning_cfg.get("enabled", False))
 
+    best: dict[str, Any] = {"rmse": float("inf")}
+    runs_summary: list[dict[str, Any]] = []
+
     if use_tuning:
         grid = tuning_cfg.get("param_grid") or {}
         combinations = _iter_param_grid(grid)
-        log(f"Tuning: {len(combinations)} kombinacji hiperparametrow")
+        total = len(combinations)
+        log(f"Strojenie hiperparametrow: {total} kombinacji w siatce")
+        for idx, hyperparams in enumerate(combinations, start=1):
+            pct = int(10 + (idx - 1) / max(total, 1) * 80)
+            progress(pct, f"Strojenie — kombinacja {idx} z {total}")
+            preproc = build_preprocessor()
+            model, metrics, run_id, model_uri = _fit_and_log_run(
+                X_train, X_test, y_train, y_test, hyperparams, defaults, preproc
+            )
+            entry = {"run_id": run_id, "model_uri": model_uri, **hyperparams, **metrics}
+            runs_summary.append(entry)
+            log(
+                f"  n={hyperparams.get('n_estimators')} depth={hyperparams.get('max_depth')} "
+                f"lr={hyperparams.get('learning_rate')} -> "
+                f"RMSE={metrics['rmse']:,.0f} ({metrics['rmse_pct_of_mean']:.1f}% sredniej) "
+                f"MAPE={metrics['mape_pct']:.2f}% R2={metrics['r2']:.4f}"
+            )
+            if metrics["rmse"] < best.get("rmse", float("inf")):
+                best = {
+                    "run_id": run_id,
+                    "model_uri": model_uri,
+                    "hyperparams": hyperparams,
+                    "model": model,
+                    "preprocessor": preproc,
+                    "metrics": metrics,
+                    "rmse": metrics["rmse"],
+                }
     else:
-        combinations = [{k: params[k] for k in XGB_PARAM_KEYS if k in params}]
-
-    best: dict[str, Any] = {"rmse": float("inf")}
-    runs_summary: list[dict[str, Any]] = []
-    total = len(combinations)
-
-    for idx, hyperparams in enumerate(combinations, start=1):
-        pct = int(10 + (idx - 1) / max(total, 1) * 80)
-        progress(pct, f"Kombinacja {idx}/{total}...")
+        hyperparams = {k: params[k] for k in XGB_PARAM_KEYS if k in params}
+        log(
+            "Trening szybki (bez strojenia): "
+            f"n_estimators={hyperparams.get('n_estimators')}, "
+            f"max_depth={hyperparams.get('max_depth')}, "
+            f"learning_rate={hyperparams.get('learning_rate')}"
+        )
+        progress(20, "Trening szybki — przygotowanie modelu")
         preproc = build_preprocessor()
+        progress(50, "Trening szybki — trenowanie XGBoost")
         model, metrics, run_id, model_uri = _fit_and_log_run(
             X_train, X_test, y_train, y_test, hyperparams, defaults, preproc
         )
+        progress(85, "Trening szybki — zapis wynikow")
         entry = {"run_id": run_id, "model_uri": model_uri, **hyperparams, **metrics}
         runs_summary.append(entry)
         log(
-            f"  n={hyperparams.get('n_estimators')} depth={hyperparams.get('max_depth')} "
-            f"lr={hyperparams.get('learning_rate')} -> "
-            f"RMSE={metrics['rmse']:,.0f} ({metrics['rmse_pct_of_mean']:.1f}% sredniej) "
+            f"  RMSE={metrics['rmse']:,.0f} ({metrics['rmse_pct_of_mean']:.1f}% sredniej) "
             f"MAPE={metrics['mape_pct']:.2f}% R2={metrics['r2']:.4f}"
         )
+        best = {
+            "run_id": run_id,
+            "model_uri": model_uri,
+            "hyperparams": hyperparams,
+            "model": model,
+            "preprocessor": preproc,
+            "metrics": metrics,
+            "rmse": metrics["rmse"],
+        }
 
-        if metrics["rmse"] < best.get("rmse", float("inf")):
-            best = {
-                "run_id": run_id,
-                "model_uri": model_uri,
-                "hyperparams": hyperparams,
-                "model": model,
-                "preprocessor": preproc,
-                "metrics": metrics,
-                "rmse": metrics["rmse"],
-            }
-
-    progress(92, "Zapis modelu...")
+    progress(92, "Zapis modelu na dysk...")
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(best["preprocessor"], MODELS_DIR / "preprocessor.joblib")
     joblib.dump(best["model"], MODELS_DIR / "xgboost_model.joblib")

@@ -1,12 +1,21 @@
 {% extends "base.html" %}
 {% block title %}Pipeline DVC{% endblock %}
 {% block content %}
-<h1>Pipeline DVC</h1>
-<p>Etapy: <code>prepare</code> → <code>train</code> (plik <code>dvc.yaml</code>). Wersjonowanie artefaktow na Azure remote.</p>
+<h1>Wersjonowanie pipeline (DVC)</h1>
+<p class="muted">
+  Etapy zdefiniowane w <code>dvc.yaml</code>: <strong>prepare</strong> (oczyszczenie) → <strong>train</strong> (model i metryki).
+  W kontenerze Docker etapy uruchamiane sa przez modul Python; polecenie <code>dvc push</code> wymaga skonfigurowanego remote.
+</p>
 
 <section class="status-grid">
-  <div class="status-item">CSV: {% if paths.raw_csv %}<span class="ok">tak</span>{% else %}<span class="warn">brak</span>{% endif %}</div>
-  <div class="status-item">Metryki DVC: {% if dvc_metrics %}<span class="ok">tak</span>{% else %}<span class="warn">uruchom repro</span>{% endif %}</div>
+  <div class="status-item" data-path-key="raw_csv">
+    Plik CSV (raw):
+    <span class="path-local ok"{% if not paths.raw_csv_local %} style="display:none"{% endif %}>lokalny</span>
+    <span class="path-azure ok"{% if not paths.raw_csv_azure %} style="display:none"{% endif %}>Azure</span>
+    <span class="path-ok ok"{% if not paths.raw_csv %} style="display:none"{% endif %}>dostepny</span>
+    <span class="path-warn warn"{% if paths.raw_csv %} style="display:none"{% endif %}>brak</span>
+  </div>
+  <div class="status-item">Metryki pipeline: {% if dvc_metrics %}<span class="ok">zapisane</span>{% else %}<span class="warn">uruchom reprodukcje</span>{% endif %}</div>
 </section>
 
 <section class="ops-panel">
@@ -14,19 +23,19 @@
   <div class="progress-wrap">
     <div class="progress-bar" id="job-progress-bar" style="width:0%"></div>
   </div>
-  <div id="job-status" class="job-status muted">Gotowy</div>
-  <pre id="job-log" class="job-log">Kliknij przycisk aby uruchomic pipeline DVC.</pre>
+  <div id="job-status" class="job-status muted">Gotowy do uruchomienia</div>
+  <pre id="job-log" class="job-log" data-placeholder="Dziennik pipeline DVC — wybierz operacje ponizej.">Dziennik pipeline DVC — wybierz operacje ponizej.</pre>
   <div class="btn-row">
-    <button type="button" class="btn-primary" data-job="dvc_repro">dvc repro (pelny)</button>
-    <button type="button" class="btn-secondary" data-job="dvc_repro_fast">dvc repro (szybki)</button>
-    <button type="button" class="btn-secondary" data-job="dvc_repro_push">repro + push Azure</button>
-    <button type="button" class="btn-secondary" data-job="dvc_push">tylko dvc push</button>
+    <button type="button" class="btn-primary" data-job="dvc_repro">Reprodukcja pipeline (pelna)</button>
+    <button type="button" class="btn-secondary" data-job="dvc_repro_fast">Reprodukcja pipeline (szybka)</button>
+    <button type="button" class="btn-secondary" data-job="dvc_repro_push">Reprodukcja + wysylka na remote</button>
+    <button type="button" class="btn-secondary" data-job="dvc_push" data-skip-reload>Wysylka artefaktow (push)</button>
   </div>
 </section>
 
 {% if dvc_metrics %}
 <section class="info-box">
-  <h2>Metryki DVC</h2>
+  <h2>Metryki ostatniego uruchomienia</h2>
   <ul>
     {% for k, v in dvc_metrics.items() %}
     <li><strong>{{ k }}</strong>: {{ v }}</li>
@@ -35,8 +44,9 @@
 </section>
 {% endif %}
 {% if phase5_text %}
-<section class="info-box">
-  <h2>Ostatni run z portalu</h2>
+<section class="info-box" id="dvc-pipeline-summary">
+  <h2>Podsumowanie ostatniej reprodukcji pipeline</h2>
+  <p class="muted">Aktualizowane po reprodukcji (repro), nie po samym push.</p>
   <pre>{{ phase5_text }}</pre>
 </section>
 {% endif %}
