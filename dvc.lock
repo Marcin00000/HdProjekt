@@ -1,0 +1,102 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: .\.venv\Scripts\python.exe scripts/dvc_prepare.py
+    deps:
+    - path: job_salary_prediction_dataset.csv
+      hash: md5
+      md5: 5aa080a82b2557b3ec963e9b3644ce6c
+      size: 17139005
+    - path: scripts/dvc_prepare.py
+      hash: md5
+      md5: a875e51c2999f1613273656c15dc42a4
+      size: 549
+    - path: src/cleaning/preprocess.py
+      hash: md5
+      md5: a75fe0de51bac108dc7a6f1ede3f6967
+      size: 3906
+    - path: src/dvc/pipeline_stages.py
+      hash: md5
+      md5: 9db17d62f98f1839a186e2ce3dbfb151
+      size: 4535
+    - path: src/etl/lake_io.py
+      hash: md5
+      md5: f44bea514fd51cddcd8c4075690f16ee
+      size: 1648
+    - path: src/etl/schema_mapping.yaml
+      hash: md5
+      md5: fe8b5a74922e6a23e7db21415cfeedc7
+      size: 984
+    params:
+      params.yaml:
+        prepare.max_experience_years: 40
+        prepare.salary_quantile_high: 0.99
+        prepare.salary_quantile_low: 0.01
+    outs:
+    - path: data/processed/cleaned.parquet
+      hash: md5
+      md5: 6682b90deae19d85f4708eaf1aa5ae88
+      size: 2661740
+  train:
+    cmd: .\.venv\Scripts\python.exe scripts/dvc_train.py
+    deps:
+    - path: data/processed/cleaned.parquet
+      hash: md5
+      md5: 6682b90deae19d85f4708eaf1aa5ae88
+      size: 2661740
+    - path: scripts/dvc_train.py
+      hash: md5
+      md5: 1f58eaccbccb8e463a6524706a1ddd3a
+      size: 550
+    - path: src/dvc/pipeline_stages.py
+      hash: md5
+      md5: 9db17d62f98f1839a186e2ce3dbfb151
+      size: 4535
+    - path: src/mlflow_config.py
+      hash: md5
+      md5: 3b860b01209a4d325bb0684561f672c3
+      size: 3829
+    - path: src/train/features.py
+      hash: md5
+      md5: 6543d4c0ba03f682ea07d89a93a96a5f
+      size: 2749
+    - path: src/train/train_model.py
+      hash: md5
+      md5: d837d02745dee2372d36fad298e218e1
+      size: 7419
+    params:
+      params.yaml:
+        colsample_bytree: 0.85
+        dvc.fast_train: false
+        early_stopping_rounds: 40
+        learning_rate: 0.03
+        max_depth: 7
+        min_child_weight: 3
+        n_estimators: 800
+        random_state: 42
+        reg_alpha: 0.5
+        reg_lambda: 2.0
+        subsample: 0.85
+        test_size: 0.2
+        tuning.enabled: true
+    outs:
+    - path: data/processed/metrics.json
+      hash: md5
+      md5: d39c192d26b07965635ad183bd815ee0
+      size: 197
+    - path: data/processed/phase4_metrics.json
+      hash: md5
+      md5: 516d38af4eaa90fb25d98027cdc3ce7c
+      size: 1218
+    - path: data/processed/predictions.csv
+      hash: md5
+      md5: dfd386526d0968168ad6f9189d433844
+      size: 1446894
+    - path: models/preprocessor.joblib
+      hash: md5
+      md5: 305fe4b752c83636c371039220de4963
+      size: 4343
+    - path: models/xgboost_model.joblib
+      hash: md5
+      md5: a6127c9f6869f4b03e71a6a76a18c267
+      size: 7211814

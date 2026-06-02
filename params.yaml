@@ -1,0 +1,33 @@
+# Parametry wspoldzielone: faza 4 (MLflow) + faza 5 (DVC pipeline)
+
+prepare:
+  salary_quantile_low: 0.01
+  salary_quantile_high: 0.99
+  max_experience_years: 40
+
+test_size: 0.2
+random_state: 42
+
+# Domyslne hiperparametry (gdy tuning.enabled: false)
+n_estimators: 800
+max_depth: 7
+learning_rate: 0.03
+subsample: 0.85
+colsample_bytree: 0.85
+reg_alpha: 0.5
+reg_lambda: 2.0
+min_child_weight: 3
+early_stopping_rounds: 40
+
+# DVC: fast_train=true pomija tuning przy `dvc repro` (szybszy CI)
+dvc:
+  fast_train: false
+
+# Tuning — mniejsza siatka, wiecej parametrow regularyzacji
+tuning:
+  enabled: true
+  param_grid:
+    n_estimators: [500, 800]
+    max_depth: [6, 7, 8]
+    learning_rate: [0.03, 0.05]
+    # subsample / colsample_bytree z sekcji domyslnej powyzej

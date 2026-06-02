@@ -1,0 +1,55 @@
+# Pipeline DVC — faza 5 (prepare -> train)
+# Uruchomienie: dvc repro   lub   python scripts/run_phase5.py
+
+vars:
+  - params.yaml
+
+stages:
+  prepare:
+    cmd: .\.venv\Scripts\python.exe scripts/dvc_prepare.py
+    deps:
+      - scripts/dvc_prepare.py
+      - src/dvc/pipeline_stages.py
+      - src/cleaning/preprocess.py
+      - src/etl/lake_io.py
+      - src/etl/schema_mapping.yaml
+      - job_salary_prediction_dataset.csv
+    params:
+      - params.yaml:
+          - prepare.salary_quantile_low
+          - prepare.salary_quantile_high
+          - prepare.max_experience_years
+    outs:
+      - data/processed/cleaned.parquet
+
+  train:
+    cmd: .\.venv\Scripts\python.exe scripts/dvc_train.py
+    deps:
+      - scripts/dvc_train.py
+      - src/dvc/pipeline_stages.py
+      - src/train/train_model.py
+      - src/train/features.py
+      - src/mlflow_config.py
+      - data/processed/cleaned.parquet
+    params:
+      - params.yaml:
+          - test_size
+          - random_state
+          - n_estimators
+          - max_depth
+          - learning_rate
+          - subsample
+          - colsample_bytree
+          - reg_alpha
+          - reg_lambda
+          - min_child_weight
+          - early_stopping_rounds
+          - tuning.enabled
+          - dvc.fast_train
+    outs:
+      - data/processed/predictions.csv
+      - data/processed/phase4_metrics.json
+      - models/preprocessor.joblib
+      - models/xgboost_model.joblib
+    metrics:
+      - data/processed/metrics.json
