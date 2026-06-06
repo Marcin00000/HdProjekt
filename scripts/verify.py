@@ -19,6 +19,7 @@ REMOTE_NAME = "azure_remote"
 
 REQUIRED_PATHS = [
     "api/app.py",
+    "input/.gitkeep",
     "docker-compose.yml",
     "readme.md",
     "docs/configuration.md",
@@ -194,23 +195,65 @@ def setup_dvc_remote() -> bool:
     return True
 
 
-def check_mlflow_client() -> bool:
+def check_mlflow_client(*, strict: bool = False) -> bool:
     from src.mlflow_config import EXPERIMENT_NAME, REGISTERED_MODEL_NAME, configure_mlflow
 
     print("\n=== MLflow (klient) ===")
-    configure_mlflow()
-    from mlflow.tracking import MlflowClient
+    try:
+        configure_mlflow()
+        from mlflow.tracking import MlflowClient
 
-    client = MlflowClient()
+        client = MlflowClient()
+    except Exception as exc:
+        print(f"  BLAD klienta MLflow: {exc}")
+        return False
+
     exp = client.get_experiment_by_name(EXPERIMENT_NAME)
     if not exp:
-        print(f"  BRAK eksperymentu {EXPERIMENT_NAME!r} — uruchom: python scripts/run.py train")
-        return False
+        print(
+            f"  INFO — brak eksperymentu {EXPERIMENT_NAME!r} (swiezy projekt). "
+            "Po treningu: python scripts/run.py train"
+        )
+        return not strict
 
     runs = client.search_runs(experiment_ids=[exp.experiment_id])
     versions = client.search_model_versions(f"name='{REGISTERED_MODEL_NAME}'")
-    print(f"  eksperyment: {len(runs)} runow, rejestr: {len(versions)} wersji")
-    return len(runs) > 0
+    if not runs:
+        print(
+            f"  INFO — eksperyment istnieje, brak runow ({len(versions)} wersji rejestru). "
+            "Uruchom trening, aby zapelnic MLflow."
+        )
+        return not strict
+
+    print(f"  OK — eksperyment: {len(runs)} runow, rejestr: {len(versions)} wersji")
+    return True
+
+
+def check_data_sources() -> bool:
+    """Informacja o CSV/silver — nie blokuje swiezego klonu."""
+    from src.config import PROJECT_ROOT, find_local_raw_csv
+    from src.portal.model_artifacts import models_ready
+
+    print("\n=== Dane i modele ===")
+    local = find_local_raw_csv()
+    silver = PROJECT_ROOT / "data" / "processed" / "cleaned.parquet"
+    if local is not None:
+        print(f"  OK — CSV lokalnie: {local.relative_to(PROJECT_ROOT)}")
+    elif silver.is_file():
+        print("  OK — warstwa silver: data/processed/cleaned.parquet")
+    else:
+        print(
+            "  INFO — brak CSV/silver lokalnie. Skopiuj CSV do katalogu glownego lub "
+            "input/job_salary_prediction_dataset.csv (Docker), albo uzyj danych w Azure lake."
+        )
+    if models_ready():
+        print("  OK — modele produkcyjne: models/*.joblib")
+    else:
+        print(
+            "  INFO — brak modelu (oczekiwane po clone). Portal dziala; "
+            "prognoza po treningu lub dvc pull."
+        )
+    return True
 
 
 def check_mlflow_server(port: int = 5003) -> bool:
@@ -258,9 +301,19 @@ def main() -> int:
     parser.add_argument("--upload-raw", action="store_true", help="Wgraj CSV do lake")
     parser.add_argument("--dvc", action="store_true", help="Konfiguracja DVC remote")
     parser.add_argument("--mlflow", action="store_true", help="Sprawdz eksperyment MLflow")
+    parser.add_argument(
+        "--mlflow-strict",
+        action="store_true",
+        help="MLflow musi miec run (nie tylko pusty eksperyment)",
+    )
     parser.add_argument("--mlflow-server", action="store_true", help="Test serwera MLflow UI")
     parser.add_argument("--project", action="store_true", help="Sprawdz pliki projektu")
-    parser.add_argument("--all", action="store_true", help="env + project + azure + sql + dvc + mlflow")
+    parser.add_argument("--data", action="store_true", help="Status CSV/silver/modeli (informacyjnie)")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="env + project + data + azure + sql + dvc + mlflow (lagodny dla swiezego projektu)",
+    )
     args = parser.parse_args()
 
     if not any(
@@ -270,8 +323,10 @@ def main() -> int:
             args.sql,
             args.dvc,
             args.mlflow,
+            args.mlflow_strict,
             args.mlflow_server,
             args.project,
+            args.data,
             args.all,
         )
     ):
@@ -279,7 +334,7 @@ def main() -> int:
         args.env = True
 
     if args.all:
-        args.env = args.project = args.azure = args.sql = args.dvc = args.mlflow = True
+        args.env = args.project = args.data = args.azure = args.sql = args.dvc = args.mlflow = True
 
     print(f"Projekt: {ROOT}")
     results: list[bool] = []
@@ -288,6 +343,8 @@ def main() -> int:
         results.append(check_env_file())
     if args.project:
         results.append(check_project_files())
+    if args.data:
+        results.append(check_data_sources())
     if args.azure:
         results.append(check_storage(upload_raw=args.upload_raw))
     if args.sql:
@@ -295,7 +352,7 @@ def main() -> int:
     if args.dvc:
         results.append(setup_dvc_remote())
     if args.mlflow:
-        results.append(check_mlflow_client())
+        results.append(check_mlflow_client(strict=args.mlflow_strict))
     if args.mlflow_server:
         results.append(check_mlflow_server())
 

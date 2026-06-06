@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.config import AzureStorageConfig, local_raw_data_path
+from src.config import AzureStorageConfig, find_local_raw_csv
 
 
 def read_raw_csv(cfg: AzureStorageConfig | None = None, prefer_lake: bool = True) -> pd.DataFrame:
@@ -17,14 +17,14 @@ def read_raw_csv(cfg: AzureStorageConfig | None = None, prefer_lake: bool = True
             path = cfg.abfs_path(cfg.raw_path)
             return pd.read_csv(path, storage_options=opts)
         except Exception as exc:
-            local = local_raw_data_path()
-            if local.is_file():
+            local = find_local_raw_csv()
+            if local is not None:
                 print(f"Ostrzeżenie: odczyt z lake nie powiódł się ({exc}), używam pliku lokalnego.")
                 return pd.read_csv(local)
             raise
 
-    local = local_raw_data_path()
-    if local.is_file():
+    local = find_local_raw_csv()
+    if local is not None:
         return pd.read_csv(local)
     path = cfg.abfs_path(cfg.raw_path)
     return pd.read_csv(path, storage_options=opts)

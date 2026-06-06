@@ -24,6 +24,7 @@ SUITES: dict[str, list[str]] = {
         "api/tests/test_drift_simulate.py",
         "api/tests/test_drift_retrain.py",
         "api/tests/test_train_fast.py",
+        "api/tests/test_onboarding.py",
     ],
     "all": ["api/tests"],
 }

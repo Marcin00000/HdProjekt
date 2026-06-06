@@ -18,6 +18,8 @@ env/
 
 # Dane — surowe, przetworzone, duże pliki
 job_salary_prediction_dataset.csv
+input/*
+!input/.gitkeep
 data/**/*.csv
 data/**/*.parquet
 data/cache/

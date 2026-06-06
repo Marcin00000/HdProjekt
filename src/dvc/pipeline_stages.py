@@ -9,7 +9,7 @@ from typing import Any
 import pandas as pd
 
 from src.cleaning.preprocess import clean_dataframe
-from src.config import PROJECT_ROOT
+from src.config import PROJECT_ROOT, find_local_raw_csv
 from src.etl.lake_io import read_raw_csv
 from src.train.train_model import load_params, train_xgboost
 
@@ -26,9 +26,10 @@ def run_prepare(params: dict[str, Any] | None = None) -> dict[str, Any]:
     params = params or load_params()
     prep = _prepare_params(params)
 
-    if RAW_CSV.is_file():
-        raw = pd.read_csv(RAW_CSV)
-        source = str(RAW_CSV)
+    local_csv = find_local_raw_csv()
+    if local_csv is not None:
+        raw = pd.read_csv(local_csv)
+        source = str(local_csv)
     else:
         from src.config import AzureStorageConfig
 

@@ -115,12 +115,8 @@ Wolumeny montowane na hoście:
 | `./reports` | Raporty HTML Evidently |
 | `./params.yaml` | Parametry (tylko odczyt) |
 
-Opcjonalnie można zamontować plik CSV:
-
-```yaml
-volumes:
-  - ./job_salary_prediction_dataset.csv:/app/job_salary_prediction_dataset.csv:ro
-```
+W Dockerze katalog `input/` jest montowany do kontenera (`LOCAL_RAW_DATA_PATH=input/job_salary_prediction_dataset.csv`).  
+Należy skopiować plik CSV do `input/job_salary_prediction_dataset.csv` przed uruchomieniem ETL w kontenerze (alternatywa: dane w Azure lake).
 
 Zmienne z `.env` są ładowane przez `env_file` w compose (plik nie jest wymagany do startu kontenera, lecz potrzebny do operacji Azure).
 

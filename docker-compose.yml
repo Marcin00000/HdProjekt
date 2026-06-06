@@ -22,7 +22,9 @@ services:
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
       PREFECT_HOME: /app/data/prefect
       API_SKIP_MODEL_LOAD: "0"
+      LOCAL_RAW_DATA_PATH: input/job_salary_prediction_dataset.csv
     volumes:
+      - ./input:/app/input:ro
       - ./models:/app/models
       - ./data/mlflow:/app/data/mlflow
       - ./data/prefect:/app/data/prefect

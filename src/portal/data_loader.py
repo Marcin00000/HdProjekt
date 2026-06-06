@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.config import AzureStorageConfig, PROJECT_ROOT, local_raw_data_path
+from src.config import AzureStorageConfig, PROJECT_ROOT, find_local_raw_csv
 from src.etl.lake_io import read_raw_csv, read_parquet
 
 SILVER_PATH = PROJECT_ROOT / "data" / "processed" / "cleaned.parquet"
@@ -13,8 +13,8 @@ GOLD_BY_LOCATION = PROJECT_ROOT / "data" / "processed" / "salary_by_location.par
 
 def load_raw_with_source() -> tuple[pd.DataFrame, str]:
     """CSV lokalny, w razie braku — Azure Data Lake (raw)."""
-    local = local_raw_data_path()
-    if local.is_file():
+    local = find_local_raw_csv()
+    if local is not None:
         return pd.read_csv(local), "local"
     cfg = AzureStorageConfig()
     return read_raw_csv(cfg), "azure"

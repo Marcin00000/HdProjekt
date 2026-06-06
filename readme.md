@@ -8,14 +8,55 @@ Organizacje i analitycy rynku pracy potrzebują szybkiego oszacowania wynagrodze
 
 ## Źródło danych
 
-| Element | Opis |
-|---------|------|
-| Zbiór | [Job Salary Prediction Dataset](https://www.kaggle.com/datasets/nalisha/job-salary-prediction-dataset) (Kaggle) |
-| Pobranie | Ręczne — plik CSV nie jest przechowywany w repozytorium Git |
-| Lokalnie | `job_salary_prediction_dataset.csv` w katalogu projektu |
-| W chmurze | `raw/job_salary_prediction_dataset.csv` w Azure Data Lake |
+### Zbiór
 
-Kolumny wejściowe: `job_title`, `experience_years`, `education_level`, `skills_count`, `industry`, `company_size`, `location`, `remote_work`, `certifications`. Kolumna docelowa: `salary`.
+| Element | Wartość |
+|---------|---------|
+| Nazwa | Job Salary Prediction Dataset |
+| Źródło | [Kaggle — nalisha/job-salary-prediction-dataset](https://www.kaggle.com/datasets/nalisha/job-salary-prediction-dataset) |
+| Autor zbioru | [nalisha](https://www.kaggle.com/nalisha) |
+| Format | CSV |
+| Skala | ok. 250 000 wierszy (ofert / rekordów) |
+| Licencja | Warunki użycia według strony zbioru na Kaggle (osobno od licencji kodu w repozytorium) |
+
+### Opis
+
+Zbiór zawiera syntetyczne rekordy ofert pracy z cechami opisującymi stanowisko, doświadczenie, branżę, lokalizację i formę zatrudnienia oraz zmienną docelową — roczne wynagrodzenie (`salary`). W projekcie służy jako:
+
+- surowe wejście pipeline ETL (warstwa `raw` → `silver` → `gold`),
+- źródło tabel hurtowni Azure SQL,
+- dane treningowe modelu regresji XGBoost.
+
+Zbiór nie zawiera daty publikacji oferty; w hurtowni wymiar czasu jest uzupełniany datą partycji ETL.
+
+### Kolumny
+
+| Kolumna | Typ | Rola w projekcie |
+|---------|-----|------------------|
+| `job_title` | tekst | cecha / wymiar stanowiska |
+| `experience_years` | liczba | cecha |
+| `education_level` | tekst | cecha |
+| `skills_count` | liczba | cecha |
+| `industry` | tekst | cecha / wymiar branży |
+| `company_size` | tekst | cecha / wymiar firmy |
+| `location` | tekst | cecha |
+| `remote_work` | tekst | cecha |
+| `certifications` | liczba | cecha |
+| `salary` | liczba | **zmienna docelowa** (prognoza) |
+
+Mapowanie kolumn: [`src/etl/schema_mapping.yaml`](src/etl/schema_mapping.yaml).
+
+### Pobranie i lokalizacja w systemie
+
+1. Pobrać plik ręcznie z Kaggle (wymagane konto; przycisk **Download** na stronie zbioru).
+2. Zapisać jako `job_salary_prediction_dataset.csv` w katalogu głównym projektu **lub** wgrać do Azure Data Lake.
+
+| Lokalizacja | Ścieżka |
+|-------------|---------|
+| Lokalnie (dev) | `job_salary_prediction_dataset.csv` |
+| Azure Data Lake | `raw/job_salary_prediction_dataset.csv` |
+
+Plik CSV **nie jest** commitowany do Git (`.gitignore`). Alternatywa bez lokalnego CSV: `dvc pull` (warstwa silver / modele po wcześniejszym `dvc push` w zespole).
 
 ## Architektura
 
@@ -120,16 +161,17 @@ git clone <url-repozytorium>
 cd HdProjekt
 copy .env.example .env
 # Uzupełnienie zmiennych Azure w .env
-# Przygotowanie CSV lub: dvc pull
+# CSV: skopiuj do input/job_salary_prediction_dataset.csv (zalecane w Docker)
+#      lub do katalogu głównego; alternatywa: dvc pull / dane w Azure lake
 
 docker compose up --build
 ```
 
-Po uruchomieniu:
+Po uruchomieniu (również bez modelu — oczekiwane po świeżym klonie):
 
-- Portal: http://localhost:8080
-- MLflow: http://localhost:5000
+- Portal: http://localhost:8080 — ETL i trening z przeglądarki
 - Prefect: http://localhost:4200
+- MLflow: http://localhost:5000 — dostępne po pierwszym treningu (`data/mlflow/mlflow.db`)
 
 Historia Prefect jest trwała dzięki wolumenowi `./data/prefect`.
 
@@ -143,11 +185,12 @@ copy .env.example .env
 python scripts/verify.py --all
 
 python scripts/run.py prepare
-python scripts/run.py load-dwh
-python scripts/run.py dvc --fast
+python scripts/run.py train --no-tune
 python scripts/run.py app --serve
 ```
 
+`verify.py --all` akceptuje świeży projekt (brak modelu / runów MLflow = komunikat INFO).  
+`run.py app --serve` startuje portal bez modelu; prognoza po treningu.  
 Weryfikacja testów: `python scripts/test.py`.
 
 Szczegóły CLI: [docs/user-cli.md](docs/user-cli.md).
@@ -180,4 +223,4 @@ Szczegóły CLI: [docs/user-cli.md](docs/user-cli.md).
 
 ## Autorzy
 
-Zespół projektowy — WNSiT US.
+Zespół projektowy — TURTLE TEAM WNSiT US.

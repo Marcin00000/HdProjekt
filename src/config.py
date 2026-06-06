@@ -85,3 +85,14 @@ class AzureSqlConfig:
 def local_raw_data_path() -> Path:
     rel = _optional("LOCAL_RAW_DATA_PATH", "job_salary_prediction_dataset.csv")
     return PROJECT_ROOT / rel
+
+
+def find_local_raw_csv() -> Path | None:
+    """Plik CSV: sciezka z .env, katalog glowny lub input/ (Docker)."""
+    primary = local_raw_data_path()
+    if primary.is_file():
+        return primary
+    fallback = PROJECT_ROOT / "input" / "job_salary_prediction_dataset.csv"
+    if fallback.is_file():
+        return fallback
+    return None

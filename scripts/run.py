@@ -272,11 +272,9 @@ def cmd_app(args: argparse.Namespace) -> int:
         return subprocess.call(["docker", "compose", "up", "--build"], cwd=ROOT)
 
     missing = [p for p in MODELS if not p.is_file()]
-    if missing and not args.docker:
-        print("Brak modeli — uruchom najpierw:")
-        print("  python scripts/run.py dvc --fast")
-        print("  lub: dvc pull")
-        return 1
+    if missing:
+        print("Uwaga: brak modeli — portal wystartuje, prognoza bedzie niedostepna (503).")
+        print("  Po starcie: trening w /docs/training lub python scripts/run.py train --no-tune")
 
     cmd = [
         sys.executable,
