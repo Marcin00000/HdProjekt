@@ -103,7 +103,11 @@ class JobRunner:
             handler = JOB_HANDLERS[job_type]
             with capture_stdout_to_log():
                 result = handler(**kwargs)
-            if job_type.startswith("train") or job_type.startswith("dvc"):
+            if (
+                job_type.startswith("train")
+                or job_type.startswith("dvc")
+                or job_type == "check_drift_retrain"
+            ):
                 try:
                     predictor.load()
                 except FileNotFoundError:

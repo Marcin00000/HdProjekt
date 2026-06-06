@@ -10,6 +10,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from api.dashboard_data import get_dashboard_data
+from src.monitoring.drift_retrain import load_retrain_audit
+from src.monitoring.evidently_report import load_drift_metrics, list_report_files
+from src.monitoring.params import load_monitoring_config
 from api.predictor import predictor
 from api.services.job_runner import job_runner
 from src.config import PROJECT_ROOT
@@ -31,6 +34,9 @@ class JobCreateRequest(BaseModel):
     fast: bool = False
     tuning_enabled: bool | None = None
     param_grid: dict[str, list[Any]] | None = None
+    scenario: str | None = None
+    count: int | None = None
+    force: bool = False
 
 
 class TuningParamsUpdate(BaseModel):
@@ -44,6 +50,18 @@ class TuningParamsUpdate(BaseModel):
 @router.get("/dashboard")
 def api_dashboard():
     return get_dashboard_data()
+
+
+@router.get("/monitoring/status")
+def monitoring_status():
+    metrics = load_drift_metrics()
+    cfg = load_monitoring_config()
+    return {
+        "metrics": metrics,
+        "config": cfg,
+        "reports": list_report_files(),
+        "last_retrain": load_retrain_audit(),
+    }
 
 
 @router.get("/predict/options")
@@ -69,7 +87,11 @@ def update_tuning(body: TuningParamsUpdate):
         current = load_params()
         grid = (current.get("tuning") or {}).get("param_grid") or {}
     data = save_tuning_config(enabled=body.enabled, param_grid=grid)
-    return {"ok": True, "tuning": data.get("tuning")}
+    return {
+        "ok": True,
+        "tuning": data.get("tuning"),
+        "saved_to": "data/processed/params_tuning_override.yaml",
+    }
 
 
 @router.get("/system/status")
@@ -84,14 +106,6 @@ def system_status():
         "paths": paths,
         "available_jobs": list(JOB_HANDLERS.keys()),
     }
-
-
-@router.get("/summaries/etl")
-def etl_summary():
-    path = PROJECT_ROOT / "data" / "processed" / "phase3_metrics.json"
-    if not path.is_file():
-        return {"present": False, "text": ""}
-    return {"present": True, "text": path.read_text(encoding="utf-8")}
 
 
 @router.get("/jobs")
@@ -114,11 +128,17 @@ def create_job(body: JobCreateRequest):
         kwargs["upload_lake"] = body.upload_lake or body.job_type == "prepare_lake"
     if body.job_type.startswith("etl"):
         kwargs["skip_sql"] = body.skip_sql or body.job_type == "etl_skip_sql"
-    if "fast" in body.job_type or body.fast:
+    if body.job_type in ("train_fast", "dvc_repro_fast"):
+        kwargs["fast"] = True
+    elif body.fast and body.job_type in ("train", "dvc_repro"):
         kwargs["fast"] = True
 
     if body.job_type.startswith("train"):
         params = load_params()
+        if kwargs.get("fast"):
+            tuning = params.get("tuning") or {}
+            tuning["enabled"] = False
+            params["tuning"] = tuning
         if body.tuning_enabled is not None:
             tuning = params.get("tuning") or {}
             tuning["enabled"] = body.tuning_enabled
@@ -128,6 +148,23 @@ def create_job(body: JobCreateRequest):
             tuning["param_grid"] = body.param_grid
             params["tuning"] = tuning
         kwargs["params_override"] = params
+
+    if body.job_type == "simulate_drift":
+        from src.monitoring.drift_simulate import SCENARIOS
+        from src.monitoring.params import load_monitoring_config
+
+        cfg = load_monitoring_config()
+        scenario = (body.scenario or "location_shift").strip()
+        if scenario not in SCENARIOS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Nieznany scenariusz: {scenario}. Dostepne: {', '.join(SCENARIOS)}",
+            )
+        kwargs["scenario"] = scenario
+        kwargs["count"] = body.count or int(cfg.get("default_simulate_count", 5000))
+
+    if body.job_type == "check_drift_retrain":
+        kwargs["force"] = body.force
 
     try:
         record = job_runner.submit(body.job_type, **kwargs)

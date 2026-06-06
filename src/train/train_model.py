@@ -41,9 +41,12 @@ XGB_PARAM_KEYS = (
 
 
 def load_params(path: Path | None = None) -> dict[str, Any]:
-    path = path or PROJECT_ROOT / "params.yaml"
-    with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    if path is not None:
+        with open(path, encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    from src.portal.params_io import load_merged_params
+
+    return load_merged_params()
 
 
 def evaluate_model(y_true: pd.Series, y_pred: np.ndarray) -> dict[str, float]:
@@ -99,7 +102,7 @@ def _fit_and_log_run(
     early_stop = int(defaults.get("early_stopping_rounds", 0))
     fit_kw: dict[str, Any] = {}
     if early_stop > 0:
-        xgb_kw = {**xgb_kw, "early_stopping_rounds": early_stop}
+        xgb_kw["early_stopping_rounds"] = early_stop
         fit_kw["eval_set"] = [(X_test_t, y_test)]
         fit_kw["verbose"] = False
 
@@ -148,6 +151,11 @@ def train_xgboost(
         test_size=float(params.get("test_size", 0.2)),
         random_state=random_state,
     )
+
+    from src.monitoring.baseline import save_training_baseline
+
+    save_training_baseline(X_train, y_train)
+    log(f"Baseline monitoringu zapisany ({len(X_train):,} wierszy treningowych).")
 
     preprocessor = build_preprocessor()
 
@@ -229,7 +237,7 @@ def train_xgboost(
         "metrics": best["metrics"],
         "all_runs": runs_summary,
         "tuning_enabled": use_tuning,
-        "combinations_tested": len(combinations),
+        "combinations_tested": len(runs_summary),
         "train_rows": len(X_train),
         "test_rows": len(X_test),
     }

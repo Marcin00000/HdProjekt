@@ -4,7 +4,7 @@ Projekt zespołowy na przedmiot **Hurtownie danych i analityczne metody przetwar
 
 ## Problem biznesowy
 
-Rynek pracy wymaga szybkiego oszacowania pensji na podstawie cech oferty (stanowisko, doświadczenie, branża, lokalizacja, model pracy zdalnej). System łączy hurtownię danych w chmurze, pipeline ETL, model **XGBoost**, **jedną aplikację webową FastAPI** (dashboard, prognoza, nawigacja do MLflow/DVC) oraz MLOps (DVC, monitoring, CI/CD) — pod ocenę **bdb**. **Bez Streamlit** — produkcja przez **Docker**.
+Rynek pracy wymaga szybkiego oszacowania pensji na podstawie cech oferty (stanowisko, doświadczenie, branża, lokalizacja, model pracy zdalnej). System łączy hurtownię danych w chmurze, pipeline ETL, model **XGBoost**, **jedną aplikację webową FastAPI** (dashboard, prognoza, monitoring driftu, retrening) oraz MLOps (DVC, MLflow, Prefect) — pod ocenę **bdb**. **Bez Streamlit**, **bez GitHub Actions** — produkcja przez **Docker**.
 
 ## Źródło danych
 
@@ -57,9 +57,10 @@ copy .env.example .env
 
 docker compose up --build
 # Przeglądarka: http://localhost:8080  — portal (dashboard, prognoza, linki do MLflow)
+# Historia Prefect: wolumen ./data/prefect (SQLite serwera — przetrwa restart kontenera)
 ```
 
-Plan portalu: [docs/portal-docker.md](docs/portal-docker.md) · szczegóły: `.cursor/plans/projekt_hd_bdb_5389cdd2.plan.md`
+Plan portalu: [docs/portal-docker.md](docs/portal-docker.md) · **demo promotora:** [docs/demo-presentation.md](docs/demo-presentation.md)
 
 ## Szybki start (development — skrypty)
 
@@ -80,10 +81,13 @@ python scripts/run_phase4.py
 python scripts/run_phase5.py --fast
 python scripts/run_phase6.py --serve   # REST API :8000
 python scripts/run_phase7.py           # portal web (dashboard, prognoza, docs)
+python scripts/run_phase8.py           # monitoring driftu (symulacja + pytest)
+python scripts/run_phase9.py           # retrening przy drift
+python scripts/run_phase10.py          # integracja + checklist demo
 python scripts/run_mlflow_ui.py        # MLflow :5000
 ```
 
-DVC: [docs/dvc-pipeline.md](docs/dvc-pipeline.md) · portal/Docker: [docs/portal-docker.md](docs/portal-docker.md) · API: [docs/api.md](docs/api.md) · Prefect: [docs/prefect-etl.md](docs/prefect-etl.md)
+DVC: [docs/dvc-pipeline.md](docs/dvc-pipeline.md) · portal: [docs/portal-docker.md](docs/portal-docker.md) · monitoring: [docs/monitoring-drift.md](docs/monitoring-drift.md) · retrening: [docs/monitoring-retrain.md](docs/monitoring-retrain.md) · demo: [docs/demo-presentation.md](docs/demo-presentation.md)
 
 ## Struktura katalogów
 
@@ -109,15 +113,16 @@ Po ukończeniu projektu możesz **bez zmiany kodu biznesowego** przetestować:
 
 ## Checklist ocena **bdb**
 
-| Element | Status | Dowód (po implementacji) |
-|---------|--------|---------------------------|
-| Repozytorium Git + README | częściowo | ten plik |
+| Element | Status | Dowód |
+|---------|--------|--------|
+| Repozytorium Git + README | tak | ten plik |
 | Azure SQL + dashboard | tak | portal `/dashboard`, `src/etl/load_dwh.py` |
-| Pipeline ETL (Prefect) | planowane | `src/etl/flows.py` |
-| Model + ewaluacja | planowane | XGBoost + MLflow |
-| MLflow + DVC + API + portal | tak | `data/mlflow/`, `dvc.yaml`, `api/`, `docker compose` |
-| Monitoring (Evidently) | planowane | `src/monitoring/` |
-| CI/CD lub retraining | planowane | `.github/workflows/` lub Prefect cron |
+| Pipeline ETL (Prefect) | tak | `src/etl/flows.py`, Prefect :4200, `/docs/etl` |
+| Model + ewaluacja | tak | XGBoost + MLflow, `/docs/training` |
+| MLflow + DVC + API + portal | tak | `dvc.yaml`, `docker compose`, `/predict` |
+| Monitoring (Evidently) | tak | `/monitoring`, `docs/monitoring-drift.md` |
+| Retraining przy drift | tak | `check_drift_retrain`, Prefect `monitor_and_retrain` |
+| Integracja / demo | tak | `docs/demo-presentation.md`, `python scripts/run_phase10.py` |
 
 ## Autorzy
 

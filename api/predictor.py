@@ -11,12 +11,9 @@ import pandas as pd
 
 from api.schemas import SalaryPredictRequest
 from src.config import PROJECT_ROOT
+from src.portal.model_artifacts import MODEL_PATH, PREPROCESSOR_PATH, joblib_looks_valid
 from src.portal.predict_options import get_predict_field_options
 from src.train.features import RAW_FEATURE_COLUMNS
-
-MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
-PREPROCESSOR_PATH = MODELS_DIR / "preprocessor.joblib"
-MODEL_PATH = MODELS_DIR / "xgboost_model.joblib"
 PREDICTION_LOG = PROJECT_ROOT / "data" / "processed" / "prediction_log.jsonl"
 
 
@@ -34,6 +31,13 @@ class PredictorService:
             raise FileNotFoundError(f"Brak preprocessora: {PREPROCESSOR_PATH}")
         if not MODEL_PATH.is_file():
             raise FileNotFoundError(f"Brak modelu: {MODEL_PATH}")
+        if not joblib_looks_valid(PREPROCESSOR_PATH):
+            raise ValueError(f"Uszkodzony preprocessor: {PREPROCESSOR_PATH}")
+        if not joblib_looks_valid(MODEL_PATH):
+            raise ValueError(
+                f"Uszkodzony model XGBoost: {MODEL_PATH} "
+                "(usun plik i uruchom dvc pull lub trening szybki)."
+            )
         self._preprocessor = joblib.load(PREPROCESSOR_PATH)
         self._model = joblib.load(MODEL_PATH)
 

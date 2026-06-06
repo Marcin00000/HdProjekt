@@ -4,7 +4,7 @@
 <h1>Wersjonowanie pipeline (DVC)</h1>
 <p class="muted">
   Etapy zdefiniowane w <code>dvc.yaml</code>: <strong>prepare</strong> (oczyszczenie) → <strong>train</strong> (model i metryki).
-  W kontenerze Docker etapy uruchamiane sa przez modul Python; polecenie <code>dvc push</code> wymaga skonfigurowanego remote.
+  W kontenerze Docker etapy uruchamiane sa przez modul Python; <code>dvc push</code> wymaga skonfigurowanego remote Azure.
 </p>
 
 <section class="status-grid">
@@ -41,13 +41,6 @@
     <li><strong>{{ k }}</strong>: {{ v }}</li>
     {% endfor %}
   </ul>
-</section>
-{% endif %}
-{% if phase5_text %}
-<section class="info-box" id="dvc-pipeline-summary">
-  <h2>Podsumowanie ostatniej reprodukcji pipeline</h2>
-  <p class="muted">Aktualizowane po reprodukcji (repro), nie po samym push.</p>
-  <pre>{{ phase5_text }}</pre>
 </section>
 {% endif %}
 {% endblock %}

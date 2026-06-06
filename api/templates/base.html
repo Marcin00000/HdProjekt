@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Job Salary Portal{% endblock %}</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
   <link rel="stylesheet" href="/static/css/main.css">
   {% block head %}{% endblock %}
 </head>
@@ -17,6 +18,7 @@
         <a href="/docs/etl">ETL</a>
         <a href="/docs/training">Trening</a>
         <a href="/docs/dvc">DVC</a>
+        <a href="/monitoring">Monitoring</a>
         <a href="/prefect" target="_blank" rel="noopener">Prefect</a>
         <a href="/mlflow" target="_blank" rel="noopener">MLflow</a>
         <a href="/docs">API</a>
@@ -26,6 +28,7 @@
   <main class="container">
     {% block content %}{% endblock %}
   </main>
+  <div class="page-bottom-spacer" aria-hidden="true"></div>
   <footer class="site-footer">
     <div class="container">
       Model: {% if model_loaded %}<span class="ok">zaladowany</span>{% else %}<span class="warn">brak</span>{% endif %}

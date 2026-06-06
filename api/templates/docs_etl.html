@@ -4,8 +4,8 @@
 <h1>Przygotowanie danych (ETL)</h1>
 <p class="muted">
   Pipeline: warstwa <strong>raw</strong> → <strong>silver</strong> → <strong>gold</strong> → opcjonalnie hurtownia Azure SQL.
-  W kontenerze Docker bez sterownika ODBC uzyj operacji <strong>ETL bez ladowania SQL</strong>.
-  Orkiestracja: <a href="/prefect" target="_blank" rel="noopener">Prefect UI</a> (serwer uruchamiany z obrazu Docker).
+  Historie uruchomien i szczegoly zadan: <a href="/prefect" target="_blank" rel="noopener">Prefect UI</a>.
+  W kontenerze Docker bez ODBC uzyj <strong>ETL bez ladowania SQL</strong>.
 </p>
 
 <section class="status-grid">
@@ -36,19 +36,14 @@
   <div id="job-status" class="job-status muted">Gotowy do uruchomienia</div>
   <pre id="job-log" class="job-log" data-placeholder="Dziennik operacji ETL — uruchom zadanie przyciskiem powyzej. Po starcie pojawi sie szczegolowy przebieg (raw, silver, gold, SQL).">Dziennik operacji ETL — uruchom zadanie przyciskiem powyzej. Po starcie pojawi sie szczegolowy przebieg (raw, silver, gold, SQL).</pre>
   <div class="btn-row">
-    <button type="button" class="btn-primary" data-job="prepare" data-skip-reload data-refresh="etl">1. Przygotowanie danych (lokalnie)</button>
-    <button type="button" class="btn-secondary" data-job="prepare_lake" data-skip-reload data-refresh="etl">Eksport do Azure Data Lake</button>
-    <button type="button" class="btn-secondary" data-job="load_dwh" data-skip-reload data-refresh="etl">2. Ladowanie hurtowni (Azure SQL)</button>
+    <button type="button" class="btn-primary" data-job="prepare" data-skip-reload data-refresh="paths">1. Przygotowanie danych (lokalnie)</button>
+    <button type="button" class="btn-secondary" data-job="prepare_lake" data-skip-reload data-refresh="paths">Eksport do Azure Data Lake</button>
+    <button type="button" class="btn-secondary" data-job="load_dwh" data-skip-reload data-refresh="paths">2. Ladowanie hurtowni (Azure SQL)</button>
   </div>
   <div class="btn-row">
-    <button type="button" class="btn-primary" data-job="etl" data-skip-reload data-refresh="etl">3. Pipeline ETL pelny (z SQL)</button>
-    <button type="button" class="btn-secondary" data-job="etl_skip_sql" data-skip-reload data-refresh="etl">Pipeline ETL bez SQL (Docker)</button>
+    <button type="button" class="btn-primary" data-job="etl" data-skip-reload data-refresh="paths">3. Pipeline ETL pelny (z SQL)</button>
+    <button type="button" class="btn-secondary" data-job="etl_skip_sql" data-skip-reload data-refresh="paths">Pipeline ETL bez SQL (Docker)</button>
   </div>
-</section>
-
-<section class="info-box" id="etl-last-run-section"{% if not phase3_text %} style="display:none"{% endif %}>
-  <h2>Ostatnie wykonanie ETL</h2>
-  <pre id="etl-last-summary">{% if phase3_text %}{{ phase3_text }}{% endif %}</pre>
 </section>
 {% endblock %}
 {% block scripts %}

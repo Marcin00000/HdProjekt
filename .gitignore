@@ -27,6 +27,8 @@ data/dwh/
 
 # MLflow / raporty / notebooki
 data/mlflow/
+data/prefect/
+!data/prefect/.gitkeep
 mlruns/
 mlartifacts/
 _mlflow_legacy_registry/

@@ -99,6 +99,8 @@ def run_prefect_etl(*, skip_sql: bool = False) -> dict[str, Any]:
     api_url = os.getenv("PREFECT_API_URL", "").strip()
     if api_url:
         os.environ["PREFECT_API_URL"] = api_url
+        os.environ.setdefault("PREFECT_HOME", str(PROJECT_ROOT / "data" / "prefect"))
+        (PROJECT_ROOT / "data" / "prefect").mkdir(parents=True, exist_ok=True)
         log(f"Orkiestracja Prefect (API: {api_url})")
         try:
             from src.etl.flows import etl_main
@@ -223,6 +225,61 @@ def run_dvc_push_only() -> dict[str, Any]:
     return {"finished_at": _now(), "pushed": True}
 
 
+def run_simulate_drift(
+    *,
+    scenario: str = "location_shift",
+    count: int = 150,
+) -> dict[str, Any]:
+    from src.monitoring.drift_simulate import simulate_drift
+    from src.monitoring.evidently_report import compute_drift_report
+    from src.monitoring.params import load_monitoring_config
+
+    cfg = load_monitoring_config()
+    count = int(count or cfg.get("default_simulate_count", 5000))
+    progress(15, f"Symulacja driftu ({scenario}, {count} wierszy)")
+    sim = simulate_drift(scenario, count)
+    log(f"Symulacja rynku: {sim['rows_written']} wierszy -> {sim['simulated_path']}")
+    log(sim.get("note", ""))
+    progress(55, "Raport Evidently (data drift)")
+    report = compute_drift_report()
+    log(report.get("message", "Raport zapisany."))
+    progress(100, "Monitoring zakonczony")
+    return {"simulation": sim, "drift": report}
+
+
+def run_drift_report() -> dict[str, Any]:
+    from src.monitoring.evidently_report import compute_drift_report
+
+    progress(20, "Analiza driftu (Evidently)")
+    report = compute_drift_report()
+    log(report.get("message", ""))
+    progress(100, "Raport driftu gotowy")
+    return report
+
+
+def run_clear_drift_simulation() -> dict[str, Any]:
+    from src.monitoring.drift_simulate import clear_simulation
+
+    clear_simulation()
+    log("Wylaczono symulacje — raport uzyje cleaned.parquet z ETL.")
+    return {"cleared": True}
+
+
+def run_check_drift_retrain(*, force: bool = False) -> dict[str, Any]:
+    from src.monitoring.drift_retrain import check_drift_and_retrain
+
+    result = check_drift_and_retrain(manual=True, force=force)
+    if result.get("retrained"):
+        try:
+            from api.predictor import predictor
+
+            predictor.load()
+            log("Model przeładowany w API po retreningu.")
+        except Exception as exc:
+            log(f"Uwaga: przeładowanie modelu w API: {exc}")
+    return result
+
+
 JOB_HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {
     "prepare": lambda **kw: run_prepare(upload_lake=kw.get("upload_lake", False)),
     "prepare_lake": lambda **kw: run_prepare(upload_lake=True),
@@ -238,4 +295,11 @@ JOB_HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {
     "dvc_repro_fast": lambda **kw: run_dvc_repro(fast=True, push=False),
     "dvc_repro_push": lambda **kw: run_dvc_repro(fast=kw.get("fast", False), push=True),
     "dvc_push": lambda **kw: run_dvc_push_only(),
+    "simulate_drift": lambda **kw: run_simulate_drift(
+        scenario=kw.get("scenario", "location_shift"),
+        count=int(kw.get("count", 150)),
+    ),
+    "drift_report": lambda **kw: run_drift_report(),
+    "clear_drift_simulation": lambda **kw: run_clear_drift_simulation(),
+    "check_drift_retrain": lambda **kw: run_check_drift_retrain(force=kw.get("force", False)),
 }

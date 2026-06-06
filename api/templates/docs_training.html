@@ -37,6 +37,7 @@
       </div>
     </fieldset>
     <button type="submit" class="btn-secondary">Zapisz parametry</button>
+    <p id="tuning-save-msg" class="muted" style="margin:0.5rem 0 0"></p>
   </form>
 </section>
 
@@ -73,7 +74,7 @@ document.getElementById("tuning-form")?.addEventListener("submit", async (e) => 
   e.preventDefault();
   const parseList = (s, asFloat) =>
     s.split(",").map((x) => x.trim()).filter(Boolean).map((x) => (asFloat ? parseFloat(x) : parseInt(x, 10)));
-  await apiJson("/api/params/tuning", {
+  const res = await apiJson("/api/params/tuning", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -83,7 +84,11 @@ document.getElementById("tuning-form")?.addEventListener("submit", async (e) => 
       learning_rate: parseList(document.getElementById("grid-lr").value, true),
     }),
   });
-  alert("Zapisano parametry w params.yaml");
+  const msg = document.getElementById("tuning-save-msg");
+  if (msg) {
+    msg.textContent = "Zapisano: " + (res.saved_to || "params_tuning_override.yaml");
+    msg.className = "ok";
+  }
 });
 document.getElementById("btn-train")?.addEventListener("click", () =>
   startJob("train", {}, { skipReload: false }));

@@ -35,7 +35,8 @@ RUN pip install --no-cache-dir \
     "dvc[azure]" \
     prefect>=2.14.0 \
     adlfs>=2024.0.0 \
-    pyodbc>=5.0.0
+    pyodbc>=5.0.0 \
+    evidently>=0.4.0
 
 COPY src/ ./src/
 COPY api/ ./api/
@@ -47,11 +48,12 @@ COPY .dvc/ ./.dvc/
 COPY docker/entrypoint.sh /app/docker/entrypoint.sh
 COPY docker/start_mlflow_background.py /app/docker/start_mlflow_background.py
 COPY docker/start_prefect_background.py /app/docker/start_prefect_background.py
+COPY docker/sync_dvc_models.py /app/docker/sync_dvc_models.py
 RUN sed -i 's/\r$//' /app/docker/entrypoint.sh \
     && chmod +x /app/docker/entrypoint.sh
 
 # Modele montowane z hosta (DVC pull); pusty katalog na build
-RUN mkdir -p /app/models /app/data/mlflow /app/data/processed
+RUN mkdir -p /app/models /app/data/mlflow /app/data/prefect /app/data/processed /app/reports
 
 ENV PYTHONPATH=/app
 ENV PORT=8000
@@ -61,6 +63,7 @@ ENV PREFECT_PORT=4200
 ENV PREFECT_HOST=0.0.0.0
 ENV PREFECT_API_URL=http://127.0.0.1:4200/api
 ENV PREFECT_PUBLIC_URL=http://127.0.0.1:4200
+ENV PREFECT_HOME=/app/data/prefect
 ENV IN_DOCKER=1
 ENV GIT_PYTHON_REFRESH=quiet
 

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from src.config import PROJECT_ROOT, local_raw_data_path
-
-MODEL_PATH = PROJECT_ROOT / "models" / "xgboost_model.joblib"
-PREPROCESSOR_PATH = PROJECT_ROOT / "models" / "preprocessor.joblib"
 from src.portal.data_loader import GOLD_BY_LOCATION, SILVER_PATH
+from src.portal.model_artifacts import (
+    MODEL_PATH,
+    PREPROCESSOR_PATH,
+    joblib_looks_valid,
+)
 
 
 def azure_storage_configured() -> bool:
@@ -28,6 +30,6 @@ def get_paths_status() -> dict[str, bool]:
         "raw_csv_azure": azure_ok and not local_raw,
         "silver": SILVER_PATH.is_file(),
         "gold": GOLD_BY_LOCATION.is_file(),
-        "preprocessor": PREPROCESSOR_PATH.is_file(),
-        "model": MODEL_PATH.is_file(),
+        "preprocessor": joblib_looks_valid(PREPROCESSOR_PATH),
+        "model": joblib_looks_valid(MODEL_PATH),
     }

@@ -98,19 +98,6 @@ async function pollJob(jobId, jobType) {
   throw new Error("Przekroczono czas oczekiwania na zadanie");
 }
 
-async function refreshEtlSummary() {
-  const section = el("etl-last-run-section");
-  const pre = el("etl-last-summary");
-  if (!pre) return;
-  try {
-    const data = await apiJson("/api/summaries/etl");
-    if (data.present && data.text) {
-      pre.textContent = data.text;
-      if (section) section.style.display = "";
-    }
-  } catch (_) {}
-}
-
 async function refreshPathsStatus() {
   try {
     const st = await apiJson("/api/system/status");
@@ -159,8 +146,7 @@ async function startJob(jobType, extraBody = {}, options = {}) {
     } catch (_) {}
   }
 
-  if (options.refresh === "etl") {
-    await refreshEtlSummary();
+  if (options.refresh === "paths") {
     await refreshPathsStatus();
   }
 

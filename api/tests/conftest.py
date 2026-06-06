@@ -8,7 +8,8 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from api.predictor import MODEL_PATH, PREPROCESSOR_PATH, predictor
+from api.predictor import predictor
+from src.portal.model_artifacts import models_ready
 
 
 @pytest.fixture(scope="session")
@@ -28,7 +29,7 @@ def sample_payload() -> dict:
 
 @pytest.fixture(scope="session")
 def client():
-    models_ok = PREPROCESSOR_PATH.is_file() and MODEL_PATH.is_file()
+    models_ok = models_ready()
     if not models_ok:
         os.environ["API_SKIP_MODEL_LOAD"] = "1"
         predictor._preprocessor = MagicMock()

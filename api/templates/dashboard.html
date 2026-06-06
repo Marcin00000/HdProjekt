@@ -8,19 +8,25 @@
 <div class="btn-row">
   <button type="button" class="btn-secondary" onclick="loadDashboard()">Odswiez wykresy</button>
   <a class="btn-secondary" href="{{ mlflow_url }}" target="_blank" rel="noopener">MLflow</a>
-  <a class="btn-secondary" href="{{ prefect_ui_url }}" target="_blank" rel="noopener" title="Wymaga: prefect server start">Prefect UI</a>
-  <a class="btn-secondary" href="/docs/etl">Uruchom ETL</a>
+  <a class="btn-secondary" href="/prefect" target="_blank" rel="noopener">Prefect UI</a>
+  <a class="btn-secondary" href="/docs/etl">ETL</a>
 </div>
 <p id="data-source" class="muted">Ladowanie danych...</p>
-<div class="progress-wrap" id="dash-progress" style="display:none">
-  <div class="progress-bar" id="dash-progress-bar"></div>
+<div class="chart-row">
+  <div class="chart-box"><h3 class="chart-title">Pensja wg lokalizacji</h3><canvas id="chartLocation"></canvas></div>
+  <div class="chart-box"><h3 class="chart-title">Pensja wg wyksztalcenia</h3><canvas id="chartEducation"></canvas></div>
 </div>
 <div class="chart-row">
-  <div class="chart-box"><canvas id="chartLocation"></canvas></div>
-  <div class="chart-box"><canvas id="chartEducation"></canvas></div>
+  <div class="chart-box"><h3 class="chart-title">Pensja wg branzy</h3><canvas id="chartIndustry"></canvas></div>
+  <div class="chart-box"><h3 class="chart-title">Pensja wg wielkosci firmy</h3><canvas id="chartCompany"></canvas></div>
 </div>
 <div class="chart-row">
-  <div class="chart-box"><canvas id="chartRemote"></canvas></div>
+  <div class="chart-box"><h3 class="chart-title">Praca zdalna</h3><canvas id="chartRemote"></canvas></div>
+  <div class="chart-box"><h3 class="chart-title">Doswiadczenie (lata)</h3><canvas id="chartExperience"></canvas></div>
+</div>
+<div class="chart-row">
+  <div class="chart-box"><h3 class="chart-title">Top stanowiska</h3><canvas id="chartJobTitle"></canvas></div>
+  <div class="chart-box"><h3 class="chart-title">Rozklad pensji</h3><canvas id="chartSalaryDist"></canvas></div>
 </div>
 {% endblock %}
 {% block scripts %}

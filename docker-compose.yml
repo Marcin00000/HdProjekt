@@ -20,10 +20,13 @@ services:
       PREFECT_PUBLIC_URL: http://127.0.0.1:4200
       PREFECT_API_URL: http://127.0.0.1:4200/api
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
+      PREFECT_HOME: /app/data/prefect
       API_SKIP_MODEL_LOAD: "0"
     volumes:
       - ./models:/app/models
       - ./data/mlflow:/app/data/mlflow
+      - ./data/prefect:/app/data/prefect
       - ./data/processed:/app/data/processed
+      - ./reports:/app/reports
       - ./params.yaml:/app/params.yaml:ro
     restart: unless-stopped

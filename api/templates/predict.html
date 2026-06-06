@@ -2,70 +2,89 @@
 {% block title %}Prognoza pensji{% endblock %}
 {% block content %}
 <h1>Prognoza pensji</h1>
-{% if error %}
-<div class="alert alert-error">{{ error }}</div>
-{% endif %}
-{% if warning %}
-<div class="alert alert-warn">{{ warning }}</div>
-{% endif %}
-{% if result is not none %}
-<div class="alert alert-success">
-  Prognozowana pensja roczna: <strong>${{ "{:,.0f}".format(result) }}</strong> USD
+<div class="predict-layout">
+  <form method="post" action="/predict/form" class="predict-form" id="predict-form">
+    <label>Stanowisko
+      <select name="job_title" required>
+        {% for v in options.job_title %}
+        <option value="{{ v }}"{% if inputs is defined and inputs and inputs.job_title == v %} selected{% elif not (inputs is defined and inputs) and v == 'Data Scientist' %} selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Lata doswiadczenia
+      <input name="experience_years" type="number" min="0" max="40" value="{{ inputs.experience_years if inputs is defined and inputs else 5 }}" required>
+    </label>
+    <label>Wyksztalcenie
+      <select name="education_level" required>
+        {% for v in options.education_level %}
+        <option{% if inputs is defined and inputs and inputs.education_level == v %} selected{% elif not (inputs is defined and inputs) and v == 'Master' %} selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Liczba umiejetnosci
+      <input name="skills_count" type="number" min="0" value="{{ inputs.skills_count if inputs is defined and inputs else 10 }}" required>
+    </label>
+    <label>Branza
+      <select name="industry" required>
+        {% for v in options.industry %}
+        <option{% if inputs is defined and inputs and inputs.industry == v %} selected{% elif not (inputs is defined and inputs) and v == 'Technology' %} selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Wielkosc firmy
+      <select name="company_size" required>
+        {% for v in options.company_size %}
+        <option{% if inputs is defined and inputs and inputs.company_size == v %} selected{% elif not (inputs is defined and inputs) and v == 'Medium' %} selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Lokalizacja
+      <select name="location" required>
+        {% for v in options.location %}
+        <option{% if inputs is defined and inputs and inputs.location == v %} selected{% elif not (inputs is defined and inputs) and v == 'USA' %} selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Praca zdalna
+      <select name="remote_work" required>
+        {% for v in options.remote_work %}
+        <option{% if inputs is defined and inputs and inputs.remote_work == v %} selected{% elif not (inputs is defined and inputs) and v == 'Yes' %} selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Certyfikaty
+      <input name="certifications" type="number" min="0" value="{{ inputs.certifications if inputs is defined and inputs else 2 }}" required>
+    </label>
+    <button type="submit">Oblicz prognoze</button>
+  </form>
+
+  <aside class="predict-result-panel">
+    <h2>Wynik</h2>
+    {% if error %}
+    <p class="predict-result-error">{{ error }}</p>
+    {% elif result is not none %}
+    <p class="predict-salary">${{ "{:,.0f}".format(result) }}</p>
+    <p class="muted predict-salary-label">Prognozowana pensja roczna (USD)</p>
+    {% if warning %}
+    <p class="predict-result-warn">{{ warning }}</p>
+    {% endif %}
+    {% if inputs is defined and inputs %}
+    <dl class="predict-summary">
+      <dt>Stanowisko</dt><dd>{{ inputs.job_title }}</dd>
+      <dt>Doswiadczenie</dt><dd>{{ inputs.experience_years }} lat</dd>
+      <dt>Wyksztalcenie</dt><dd>{{ inputs.education_level }}</dd>
+      <dt>Umiejetnosci</dt><dd>{{ inputs.skills_count }}</dd>
+      <dt>Branza</dt><dd>{{ inputs.industry }}</dd>
+      <dt>Firma</dt><dd>{{ inputs.company_size }}</dd>
+      <dt>Lokalizacja</dt><dd>{{ inputs.location }}</dd>
+      <dt>Zdalnie</dt><dd>{{ inputs.remote_work }}</dd>
+      <dt>Certyfikaty</dt><dd>{{ inputs.certifications }}</dd>
+    </dl>
+    {% endif %}
+    {% else %}
+    <p class="muted">Uzupelnij formularz i kliknij <strong>Oblicz prognoze</strong>, aby zobaczyc przewidywana pensje.</p>
+    {% endif %}
+  </aside>
 </div>
-{% endif %}
-<form method="post" action="/predict/form" class="predict-form" id="predict-form">
-  <label>Stanowisko
-    <select name="job_title" required>
-      {% for v in options.job_title %}
-      <option{% if v == 'Data Scientist' %} selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Lata doswiadczenia
-    <input name="experience_years" type="number" min="0" max="40" value="5" required>
-  </label>
-  <label>Wyksztalcenie
-    <select name="education_level" required>
-      {% for v in options.education_level %}
-      <option{% if v == 'Master' %} selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Liczba umiejetnosci
-    <input name="skills_count" type="number" min="0" value="10" required>
-  </label>
-  <label>Branza
-    <select name="industry" required>
-      {% for v in options.industry %}
-      <option{% if v == 'Technology' %} selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Wielkosc firmy
-    <select name="company_size" required>
-      {% for v in options.company_size %}
-      <option{% if v == 'Medium' %} selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Lokalizacja
-    <select name="location" required>
-      {% for v in options.location %}
-      <option{% if v == 'USA' %} selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Praca zdalna
-    <select name="remote_work" required>
-      {% for v in options.remote_work %}
-      <option{% if v == 'Yes' %} selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Certyfikaty
-    <input name="certifications" type="number" min="0" value="2" required>
-  </label>
-  <button type="submit">Oblicz prognoze</button>
-</form>
-<p class="muted">Wartosci kategorii z danych treningowych ({{ options.source }}). REST: <code>POST /predict</code></p>
+<p class="muted">Kategorie z danych treningowych ({{ options.source }}). REST: <code>POST /predict</code></p>
 {% endblock %}

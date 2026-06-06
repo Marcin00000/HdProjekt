@@ -85,6 +85,31 @@ def predict_page(
     )
 
 
+def _form_inputs(
+    *,
+    job_title: str,
+    experience_years: int,
+    education_level: str,
+    skills_count: int,
+    industry: str,
+    company_size: str,
+    location: str,
+    remote_work: str,
+    certifications: int,
+) -> dict[str, str | int]:
+    return {
+        "job_title": job_title,
+        "experience_years": experience_years,
+        "education_level": education_level,
+        "skills_count": skills_count,
+        "industry": industry,
+        "company_size": company_size,
+        "location": location,
+        "remote_work": remote_work,
+        "certifications": certifications,
+    }
+
+
 @router.post("/predict/form", response_class=HTMLResponse)
 def predict_form(
     request: Request,
@@ -98,29 +123,36 @@ def predict_form(
     remote_work: str = Form(...),
     certifications: int = Form(...),
 ):
+    inputs = _form_inputs(
+        job_title=job_title,
+        experience_years=experience_years,
+        education_level=education_level,
+        skills_count=skills_count,
+        industry=industry,
+        company_size=company_size,
+        location=location,
+        remote_work=remote_work,
+        certifications=certifications,
+    )
     try:
-        payload = SalaryPredictRequest(
-            job_title=job_title,
-            experience_years=experience_years,
-            education_level=education_level,
-            skills_count=skills_count,
-            industry=industry,
-            company_size=company_size,
-            location=location,
-            remote_work=remote_work,
-            certifications=certifications,
-        )
+        payload = SalaryPredictRequest(**inputs)
         salary, warning = predictor.predict(payload)
         return templates.TemplateResponse(
             request,
             "predict.html",
-            _predict_ctx(request, result=round(salary, 2), error=None, warning=warning),
+            _predict_ctx(
+                request,
+                result=round(salary, 2),
+                error=None,
+                warning=warning,
+                inputs=inputs,
+            ),
         )
     except Exception as exc:
         return templates.TemplateResponse(
             request,
             "predict.html",
-            _predict_ctx(request, result=None, error=str(exc)),
+            _predict_ctx(request, result=None, error=str(exc), inputs=inputs),
         )
 
 
@@ -138,11 +170,9 @@ def prefect_redirect():
 def docs_training(request: Request):
     raw_metrics = _read_json(PROCESSED / "phase4_metrics.json")
     metrics = raw_metrics.get("metrics", raw_metrics) if raw_metrics else {}
-    params = {}
-    params_path = PROJECT_ROOT / "params.yaml"
-    if params_path.is_file():
-        with open(params_path, encoding="utf-8") as f:
-            params = yaml.safe_load(f) or {}
+    from src.portal.params_io import load_params_file
+
+    params = load_params_file()
     params_text = yaml.dump(params, allow_unicode=True, default_flow_style=False) if params else ""
     tuning = params.get("tuning") or {}
     grid = tuning.get("param_grid") or {}
@@ -164,25 +194,41 @@ def docs_training(request: Request):
 @router.get("/docs/dvc", response_class=HTMLResponse)
 def docs_dvc(request: Request):
     dvc_metrics = _read_json(PROCESSED / "metrics.json")
-    phase5 = _read_json(PROCESSED / "phase5_pipeline_run.json")
-    if not phase5:
-        phase5 = _read_json(PROCESSED / "phase5_last_run.json")
-    phase5_text = json.dumps(phase5, indent=2, ensure_ascii=False) if phase5 else ""
     return templates.TemplateResponse(
         request,
         "docs_dvc.html",
-        _ctx(request, dvc_metrics=dvc_metrics, phase5_text=phase5_text),
+        _ctx(request, dvc_metrics=dvc_metrics),
     )
 
 
 @router.get("/docs/etl", response_class=HTMLResponse)
 def docs_etl(request: Request):
-    phase3 = _read_json(PROCESSED / "phase3_metrics.json")
-    phase1 = _read_json(PROCESSED / "phase1_metrics.json")
-    phase3_text = json.dumps(phase3, indent=2, ensure_ascii=False) if phase3 else ""
-    phase1_text = json.dumps(phase1, indent=2, ensure_ascii=False) if phase1 else ""
+    return templates.TemplateResponse(request, "docs_etl.html", _ctx(request))
+
+
+@router.get("/monitoring", response_class=HTMLResponse)
+def monitoring_page(request: Request):
+    from src.monitoring.baseline import baseline_exists, load_simulation_meta, simulation_is_active
+    from src.monitoring.drift_retrain import load_retrain_audit
+    from src.monitoring.drift_simulate import SCENARIOS
+    from src.monitoring.evidently_report import load_drift_metrics, list_report_files
+    from src.monitoring.params import load_monitoring_config
+
+    metrics = load_drift_metrics()
+    cfg = load_monitoring_config()
+
     return templates.TemplateResponse(
         request,
-        "docs_etl.html",
-        _ctx(request, phase3_text=phase3_text, phase1_text=phase1_text),
+        "monitoring.html",
+        _ctx(
+            request,
+            drift_metrics=metrics,
+            monitoring_cfg=cfg,
+            scenarios=SCENARIOS,
+            baseline_ok=baseline_exists(),
+            simulation_active=simulation_is_active(),
+            simulation_meta=load_simulation_meta(),
+            reports=list_report_files(),
+            last_retrain=load_retrain_audit(),
+        ),
     )

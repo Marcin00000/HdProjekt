@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+
+logger = logging.getLogger(__name__)
 from fastapi.staticfiles import StaticFiles
 
 from api.predictor import predictor
@@ -22,8 +25,8 @@ async def lifespan(app: FastAPI):
     if os.getenv("API_SKIP_MODEL_LOAD") != "1":
         try:
             predictor.load()
-        except FileNotFoundError:
-            pass
+        except (FileNotFoundError, ValueError, EOFError, OSError) as exc:
+            logger.warning("Model nie zaladowany przy starcie: %s", exc)
     yield
 
 
@@ -35,6 +38,11 @@ app = FastAPI(
 )
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/reports", StaticFiles(directory=str(REPORTS_DIR)), name="reports")
+
 app.include_router(portal_router)
 app.include_router(jobs_api_router)
 
