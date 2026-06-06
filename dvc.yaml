@@ -1,5 +1,5 @@
-# Pipeline DVC — faza 5 (prepare -> train)
-# Uruchomienie: dvc repro   lub   python scripts/run_phase5.py
+# Pipeline DVC (prepare -> train)
+# Uruchomienie: dvc repro   lub   python scripts/run.py dvc
 
 vars:
   - params.yaml
@@ -48,7 +48,7 @@ stages:
           - dvc.fast_train
     outs:
       - data/processed/predictions.csv
-      - data/processed/phase4_metrics.json
+      - data/processed/training_summary.json
       - models/preprocessor.joblib
       - models/xgboost_model.joblib
     metrics:

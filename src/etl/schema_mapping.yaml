@@ -20,7 +20,7 @@ columns:
 
 target_column: salary
 
-# Uwaga: brak daty w źródle — dim_time w SQL (faza 2) użyje daty partycji ETL
+# Uwaga: brak daty w zrodle — dim_time w SQL uzyje daty partycji ETL
 dwh:
   fact_table: fact_salaries
   dimensions:

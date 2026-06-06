@@ -1,4 +1,4 @@
-"""Wykonanie faz projektu — wywolania z portalu."""
+"""Operacje pipeline uruchamiane z portalu."""
 
 from __future__ import annotations
 
@@ -20,9 +20,14 @@ from src.portal.dvc_runtime import run_dvc_push
 from src.portal.etl_sync import run_etl_sync
 from src.portal.job_context import capture_stdout_to_log, log, progress
 from src.portal.params_io import load_params_file
+from src.processed_artifacts import (
+    DVC_RUN_SUMMARY,
+    DWH_SUMMARY,
+    PREPARE_SUMMARY,
+    PROCESSED,
+    TRAINING_SUMMARY,
+)
 from src.train.train_model import load_params, train_xgboost
-
-PROCESSED = PROJECT_ROOT / "data" / "processed"
 SILVER = PROCESSED / "cleaned.parquet"
 
 
@@ -72,7 +77,7 @@ def run_prepare(*, upload_lake: bool = False) -> dict[str, Any]:
         "gold_tables": list(gold_tables.keys()),
         "upload_lake": upload_lake,
     }
-    _write_json(PROCESSED / "phase1_metrics.json", summary)
+    _write_json(PREPARE_SUMMARY, summary)
     log(f"Gold: {len(gold_tables)} tabel zapisanych lokalnie")
     return summary
 
@@ -90,7 +95,7 @@ def run_load_dwh() -> dict[str, Any]:
         "loaded": loaded,
         "verified": verified,
     }
-    _write_json(PROCESSED / "phase2_metrics.json", summary)
+    _write_json(DWH_SUMMARY, summary)
     return summary
 
 
@@ -126,7 +131,7 @@ def run_train(
         result = train_xgboost(silver, params=params, force_tuning=not fast)
     metrics = result["metrics"]
     _write_json(
-        PROCESSED / "phase4_metrics.json",
+        TRAINING_SUMMARY,
         {
             "finished_at": _now(),
             "metrics": metrics,
@@ -206,7 +211,7 @@ def run_dvc_repro(*, fast: bool = False, push: bool = False) -> dict[str, Any]:
         "pushed": push,
         "dvc_metrics": metrics,
     }
-    _write_json(PROCESSED / "phase5_pipeline_run.json", summary)
+    _write_json(DVC_RUN_SUMMARY, summary)
     return summary
 
 
@@ -214,7 +219,7 @@ def run_dvc_push_only() -> dict[str, Any]:
     if not _dvc_repo_ready():
         raise RuntimeError(
             "Repozytorium DVC nie jest skonfigurowane w kontenerze. "
-            "Uruchom scripts/setup_dvc_remote.py lokalnie lub zamontuj katalog .dvc."
+            "Uruchom scripts/verify.py --dvc lokalnie lub zamontuj katalog .dvc."
         )
     out = run_dvc_push()
     log(out[-3000:])

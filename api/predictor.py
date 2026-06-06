@@ -73,7 +73,7 @@ class PredictorService:
         )
 
     def _append_log(self, features: dict, salary: float) -> None:
-        """Prosty audit trail pod monitoring (faza 8)."""
+        """Zapis prognozy do pliku audytowego (monitoring)."""
         try:
             PREDICTION_LOG.parent.mkdir(parents=True, exist_ok=True)
             entry = {

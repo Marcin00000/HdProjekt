@@ -91,7 +91,7 @@ def reset_mlflow_data() -> list[str]:
         MLRUNS_DIR,
         PROJECT_ROOT / "_mlflow_legacy_registry",
         PROJECT_ROOT / "models",
-        PROJECT_ROOT / "data" / "processed" / "phase4_metrics.json",
+        PROJECT_ROOT / "data" / "processed" / "training_summary.json",
     ]
     for path in targets:
         if not path.exists():

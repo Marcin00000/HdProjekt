@@ -1,128 +1,182 @@
 # Prognoza wynagrodzeń — system analityczny (HdProjekt)
 
-Projekt zespołowy na przedmiot **Hurtownie danych i analityczne metody przetwarzania** ([materiały kursu](https://hd-us.netlify.app/), [wymagania zaliczenia](https://hd-us.netlify.app/00-organizacja)).
+System wspiera szacowanie rynkowej pensji na podstawie cech oferty pracy. Łączy hurtownię danych w chmurze Microsoft Azure, pipeline przetwarzania danych, model regresji **XGBoost**, aplikację webową **FastAPI** oraz narzędzia utrzymania modelu (MLflow, DVC, Prefect, Evidently).
 
 ## Problem biznesowy
 
-Rynek pracy wymaga szybkiego oszacowania pensji na podstawie cech oferty (stanowisko, doświadczenie, branża, lokalizacja, model pracy zdalnej). System łączy hurtownię danych w chmurze, pipeline ETL, model **XGBoost**, **jedną aplikację webową FastAPI** (dashboard, prognoza, monitoring driftu, retrening) oraz MLOps (DVC, MLflow, Prefect) — pod ocenę **bdb**. **Bez Streamlit**, **bez GitHub Actions** — produkcja przez **Docker**.
+Organizacje i analitycy rynku pracy potrzebują szybkiego oszacowania wynagrodzenia przy tworzeniu ofert, negocjacjach i raportach. Ręczne porównywanie tysięcy ogłoszeń jest czasochłonne. System automatyzuje ten proces: dane ofert trafiają do hurtowni, model uczy się zależności między cechami a pensją, a wynik jest dostępny przez interfejs webowy i API.
 
 ## Źródło danych
 
-| Pole | Wartość |
-|------|---------|
-| Zbiór | [Job Salary Prediction Dataset](https://www.kaggle.com/datasets/nalisha/job-salary-prediction-dataset) (Kaggle / autor: nalisha) |
-| Pobranie | **Ręczne** (plik CSV w projekcie i w Azure Data Lake `raw/`) |
-| Lokalnie | `job_salary_prediction_dataset.csv` (nie w Git — patrz `.gitignore`) |
-| W lake | `raw/job_salary_prediction_dataset.csv` |
+| Element | Opis |
+|---------|------|
+| Zbiór | [Job Salary Prediction Dataset](https://www.kaggle.com/datasets/nalisha/job-salary-prediction-dataset) (Kaggle) |
+| Pobranie | Ręczne — plik CSV nie jest przechowywany w repozytorium Git |
+| Lokalnie | `job_salary_prediction_dataset.csv` w katalogu projektu |
+| W chmurze | `raw/job_salary_prediction_dataset.csv` w Azure Data Lake |
 
-Kolumny: `job_title`, `experience_years`, `education_level`, `skills_count`, `industry`, `company_size`, `location`, `remote_work`, `certifications`, `salary`.
+Kolumny wejściowe: `job_title`, `experience_years`, `education_level`, `skills_count`, `industry`, `company_size`, `location`, `remote_work`, `certifications`. Kolumna docelowa: `salary`.
 
 ## Architektura
 
 ```mermaid
-flowchart LR
-  CSV[CSV raw] --> Lake[Azure Data Lake]
-  Lake --> Silver[silver parquet]
-  Silver --> SQL[Azure SQL DWH]
-  Silver --> Train[XGBoost + MLflow]
-  Train --> Portal[FastAPI portal]
-  Train --> DVC[DVC remote]
+flowchart TB
+  subgraph input [Zrodla]
+    CSV[CSV surowe]
+    Lake[Azure Data Lake]
+  end
+  subgraph processing [Przetwarzanie]
+    Silver[Warstwa silver]
+    Gold[Warstwa gold]
+    SQL[Azure SQL DWH]
+    ETL[Prefect ETL]
+  end
+  subgraph ml [Model i wersjonowanie]
+    Train[XGBoost + MLflow]
+    DVC[DVC remote]
+    Monitor[Evidently monitoring]
+  end
+  subgraph access [Dostep]
+    Portal[Portal FastAPI]
+    API[REST API]
+  end
+  CSV --> Lake
+  Lake --> ETL
+  ETL --> Silver
+  ETL --> Gold
+  ETL --> SQL
+  Silver --> Train
+  Train --> DVC
+  Train --> Monitor
   SQL --> Portal
-  Portal --> MLflow[MLflow UI]
-  Portal --> Evidently[Evidently]
-  User[Przeglądarka] --> Portal
+  Train --> Portal
+  Portal --> API
 ```
 
-- **Medallion:** `raw/` → `silver/` → `gold/`
-- **Hurtownia:** schemat gwiazdy w Azure SQL
-- **ML:** XGBoost, eksperymenty w **lokalnym MLflow** (`data/mlflow/`)
-- **Wersjonowanie artefaktów:** DVC → Azure (`dvc-artifacts/`)
+### Przepływ danych (medallion)
+
+1. **raw** — surowy plik CSV w Data Lake.
+2. **silver** — oczyszczone dane (`cleaned.parquet`).
+3. **gold** — agregaty analityczne (np. średnie pensje wg lokalizacji).
+4. **Azure SQL** — schemat gwiazdy pod dashboard i zapytania SQL.
+
+### Komponenty systemu
+
+| Komponent | Rola | Dostęp |
+|-----------|------|--------|
+| Portal FastAPI | Dashboard, operacje pipeline, prognoza, monitoring | http://localhost:8080 (Docker) |
+| REST API | `POST /predict`, `GET /health` | ten sam host co portal |
+| MLflow | Rejestr eksperymentów i metryk modelu | http://localhost:5000 |
+| Prefect | Orkiestracja i harmonogram ETL | http://localhost:4200 |
+| DVC | Wersjonowanie artefaktów ML w Azure | CLI / portal `/docs/dvc` |
+| Evidently | Raporty driftu danych | portal `/monitoring` |
+
+## Interfejs
+
+### Aplikacja webowa
+
+| Ścieżka | Funkcja |
+|---------|---------|
+| `/` | Strona główna z nawigacją |
+| `/dashboard` | Wykresy z hurtowni lub danych lokalnych |
+| `/predict` | Formularz prognozy pensji |
+| `/monitoring` | Drift danych, symulacja, retrening |
+| `/docs/etl` | Przygotowanie danych, ETL, ładowanie SQL |
+| `/docs/training` | Trening modelu |
+| `/docs/dvc` | Pipeline DVC |
+| `/mlflow` | Przekierowanie do MLflow UI |
+
+### API REST
+
+| Metoda | Ścieżka | Opis |
+|--------|---------|------|
+| GET | `/health` | Status serwisu i dostępność modelu |
+| POST | `/predict` | Prognoza pensji (JSON) |
+| GET | `/docs` | Dokumentacja OpenAPI (Swagger) |
+| GET | `/api/dashboard` | Dane wykresów (JSON) |
+| POST | `/api/jobs` | Uruchomienie zadania w tle |
+
+Szczegóły: [docs/user-web.md](docs/user-web.md).
+
+## Konfiguracja
+
+Wymagany plik `.env` (wzór: `.env.example`) z danymi Azure Storage i Azure SQL. Parametry modelu i monitoringu: `params.yaml`.
+
+Pełny opis: [docs/configuration.md](docs/configuration.md).
 
 ## Wymagania wstępne
 
-- Python 3.11+
-- [ODBC Driver 18 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
+- Python 3.11 lub nowszy
+- Docker i Docker Compose (ścieżka produkcyjna)
+- [ODBC Driver 18 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server) (ładowanie hurtowni z maszyny lokalnej)
 - Konto Azure: Storage Account (ADLS Gen2) + Azure SQL Database
-- Instrukcja konfiguracji Azure: [docs/azure-setup.md](docs/azure-setup.md)
 
-## Szybki start (produkcja / demo) — Docker
+## Szybka instalacja
 
-Docelowy punkt wejścia dla użytkownika zewnętrznego (plan fazy 7):
+### Produkcja (Docker)
 
 ```powershell
 git clone <url-repozytorium>
 cd HdProjekt
 copy .env.example .env
-# Uzupełnij .env (Azure). Przygotuj CSV lub: dvc pull
+# Uzupełnienie zmiennych Azure w .env
+# Przygotowanie CSV lub: dvc pull
 
 docker compose up --build
-# Przeglądarka: http://localhost:8080  — portal (dashboard, prognoza, linki do MLflow)
-# Historia Prefect: wolumen ./data/prefect (SQLite serwera — przetrwa restart kontenera)
 ```
 
-Plan portalu: [docs/portal-docker.md](docs/portal-docker.md) · **demo promotora:** [docs/demo-presentation.md](docs/demo-presentation.md)
+Po uruchomieniu:
 
-## Szybki start (development — skrypty)
+- Portal: http://localhost:8080
+- MLflow: http://localhost:5000
+- Prefect: http://localhost:4200
 
-Skrypty są dla zespołu deweloperskiego i CI; nie wymagane przy ścieżce Docker.
+Historia Prefect jest trwała dzięki wolumenowi `./data/prefect`.
+
+### Środowisko deweloperskie
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\activate
-pip install -r requirements.txt
+python scripts/install.py
 copy .env.example .env
+python scripts/verify.py --all
 
-python scripts/setup_azure_check.py
-python scripts/setup_dvc_remote.py
-python scripts/run_phase1.py
-python scripts/run_phase2.py
-python scripts/run_phase3.py
-python scripts/run_phase4.py
-python scripts/run_phase5.py --fast
-python scripts/run_phase6.py --serve   # REST API :8000
-python scripts/run_phase7.py           # portal web (dashboard, prognoza, docs)
-python scripts/run_phase8.py           # monitoring driftu (symulacja + pytest)
-python scripts/run_phase9.py           # retrening przy drift
-python scripts/run_phase10.py          # integracja + checklist demo
-python scripts/run_mlflow_ui.py        # MLflow :5000
+python scripts/run.py prepare
+python scripts/run.py load-dwh
+python scripts/run.py dvc --fast
+python scripts/run.py app --serve
 ```
 
-DVC: [docs/dvc-pipeline.md](docs/dvc-pipeline.md) · portal: [docs/portal-docker.md](docs/portal-docker.md) · monitoring: [docs/monitoring-drift.md](docs/monitoring-drift.md) · retrening: [docs/monitoring-retrain.md](docs/monitoring-retrain.md) · demo: [docs/demo-presentation.md](docs/demo-presentation.md)
+Weryfikacja testów: `python scripts/test.py`.
+
+Szczegóły CLI: [docs/user-cli.md](docs/user-cli.md).
 
 ## Struktura katalogów
 
 ```
-├── src/           # logika (config, etl, cleaning, train, monitoring)
-├── scripts/       # setup Azure, DVC
-├── docs/          # azure-setup.md
-├── data/          # cache lokalny (puste w Git)
-├── api/           # FastAPI: API + portal web (faza 7)
-├── docker/        # entrypoint, nginx (faza 7)
-├── requirements.txt
-└── .env.example
+├── api/              # FastAPI: portal, REST API, testy
+├── src/              # Logika: ETL, trening, monitoring, portal
+├── scripts/          # install, verify, run, test
+├── docker/           # Entrypoint kontenera
+├── docs/             # Dokumentacja użytkownika
+├── data/             # Dane lokalne (poza Git)
+├── models/           # Modele produkcyjne (.joblib)
+├── reports/          # Raporty HTML (Evidently)
+├── params.yaml       # Parametry modelu i monitoringu
+├── dvc.yaml          # Pipeline DVC
+└── docker-compose.yml
 ```
 
-Szczegółowy plan faz: `.cursor/plans/projekt_hd_bdb_5389cdd2.plan.md`.
+## Dokumentacja
 
-## Rozszerzenia (poza zakresem zaliczenia)
-
-Po ukończeniu projektu możesz **bez zmiany kodu biznesowego** przetestować:
-
-- **Azure ML Workspace** jako backend MLflow — ustaw `MLFLOW_TRACKING_URI` na URI workspace i zarejestruj model w Azure ML Model Registry.
-- Harmonogram retrainingu wyłącznie w Prefect (`serve` + cron) zamiast lub obok GitHub Actions.
-
-## Checklist ocena **bdb**
-
-| Element | Status | Dowód |
-|---------|--------|--------|
-| Repozytorium Git + README | tak | ten plik |
-| Azure SQL + dashboard | tak | portal `/dashboard`, `src/etl/load_dwh.py` |
-| Pipeline ETL (Prefect) | tak | `src/etl/flows.py`, Prefect :4200, `/docs/etl` |
-| Model + ewaluacja | tak | XGBoost + MLflow, `/docs/training` |
-| MLflow + DVC + API + portal | tak | `dvc.yaml`, `docker compose`, `/predict` |
-| Monitoring (Evidently) | tak | `/monitoring`, `docs/monitoring-drift.md` |
-| Retraining przy drift | tak | `check_drift_retrain`, Prefect `monitor_and_retrain` |
-| Integracja / demo | tak | `docs/demo-presentation.md`, `python scripts/run_phase10.py` |
+| Plik | Zawartość |
+|------|-----------|
+| [docs/configuration.md](docs/configuration.md) | Azure, `.env`, `params.yaml`, Docker |
+| [docs/user-web.md](docs/user-web.md) | Instrukcja aplikacji webowej i przypadki użycia |
+| [docs/user-cli.md](docs/user-cli.md) | Instrukcja linii poleceń i przypadki użycia |
+| [docs/tools.md](docs/tools.md) | Opis narzędzi i sposób użycia w projekcie |
+| [docs/presentation.md](docs/presentation.md) | Propozycja prezentacji systemu |
 
 ## Autorzy
 

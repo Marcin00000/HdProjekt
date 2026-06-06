@@ -18,7 +18,7 @@ SILVER_PATH = PROJECT_ROOT / "data" / "processed" / "cleaned.parquet"
 PIPELINE_OUTS = (
     "data/processed/cleaned.parquet",
     "data/processed/predictions.csv",
-    "data/processed/phase4_metrics.json",
+    "data/processed/training_summary.json",
     "data/processed/metrics.json",
     "models/preprocessor.joblib",
     "models/xgboost_model.joblib",

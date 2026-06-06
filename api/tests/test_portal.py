@@ -1,4 +1,4 @@
-"""Testy tras HTML portalu (faza 7)."""
+"""Testy tras HTML portalu."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-# Obraz minimalny API (faza 6). Portal + MLflow: uzyj Dockerfile w katalogu glownym.
+# Obraz minimalny API. Portal + MLflow: uzyj Dockerfile w katalogu glownym.
 FROM python:3.12-slim
 
 WORKDIR /app

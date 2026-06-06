@@ -242,7 +242,9 @@ def train_xgboost(
         "test_rows": len(X_test),
     }
 
-    metrics_path = PROJECT_ROOT / "data" / "processed" / "phase4_metrics.json"
+    from src.processed_artifacts import TRAINING_SUMMARY
+
+    metrics_path = TRAINING_SUMMARY
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
     metrics_path.write_text(json.dumps(bundle, indent=2), encoding="utf-8")
 

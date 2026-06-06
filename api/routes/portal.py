@@ -1,4 +1,4 @@
-"""Trasy HTML portalu (faza 7) — pelna obsluga operacyjna."""
+"""Trasy HTML portalu — obsluga operacyjna z przegladarki."""
 
 from __future__ import annotations
 
@@ -168,7 +168,9 @@ def prefect_redirect():
 
 @router.get("/docs/training", response_class=HTMLResponse)
 def docs_training(request: Request):
-    raw_metrics = _read_json(PROCESSED / "phase4_metrics.json")
+    from src.processed_artifacts import TRAINING_SUMMARY
+
+    raw_metrics = _read_json(TRAINING_SUMMARY)
     metrics = raw_metrics.get("metrics", raw_metrics) if raw_metrics else {}
     from src.portal.params_io import load_params_file
 

@@ -1,4 +1,4 @@
-"""Etapy pipeline DVC (prepare, train) — logika wspolna ze skryptami fazy 5."""
+"""Etapy pipeline DVC (prepare, train)."""
 
 from __future__ import annotations
 
@@ -17,9 +17,6 @@ RAW_CSV = PROJECT_ROOT / "job_salary_prediction_dataset.csv"
 SILVER_PARQUET = PROJECT_ROOT / "data" / "processed" / "cleaned.parquet"
 METRICS_JSON = PROJECT_ROOT / "data" / "processed" / "metrics.json"
 PREDICTIONS_CSV = PROJECT_ROOT / "data" / "processed" / "predictions.csv"
-PHASE4_METRICS = PROJECT_ROOT / "data" / "processed" / "phase4_metrics.json"
-
-
 def _prepare_params(params: dict[str, Any]) -> dict[str, Any]:
     return params.get("prepare") or {}
 

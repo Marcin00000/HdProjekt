@@ -141,6 +141,8 @@ def run_etl_sync(*, skip_sql: bool = False, upload_lake: bool = True) -> dict[st
         "gold": {"tables": list(gold_tables.keys()), "paths": paths},
         "dwh": dwh_info,
     }
-    metrics_path = PROCESSED / "phase3_metrics.json"
+    from src.processed_artifacts import ETL_SUMMARY
+
+    metrics_path = ETL_SUMMARY
     metrics_path.write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
     return summary

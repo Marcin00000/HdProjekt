@@ -84,7 +84,7 @@ stages:
       hash: md5
       md5: d39c192d26b07965635ad183bd815ee0
       size: 197
-    - path: data/processed/phase4_metrics.json
+    - path: data/processed/training_summary.json
       hash: md5
       md5: 516d38af4eaa90fb25d98027cdc3ce7c
       size: 1218

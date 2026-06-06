@@ -143,7 +143,9 @@ def etl_main(skip_sql: bool = False) -> dict[str, Any]:
         "dwh": dwh_info,
     }
 
-    metrics_path = PROJECT_ROOT / "data" / "processed" / "phase3_metrics.json"
+    from src.processed_artifacts import ETL_SUMMARY
+
+    metrics_path = ETL_SUMMARY
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
     metrics_path.write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
     logger.info("Pipeline zakonczony. Metryki: %s", metrics_path)
