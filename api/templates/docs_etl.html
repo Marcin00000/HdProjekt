@@ -1,51 +1,245 @@
 {% extends "base.html" %}
-{% block title %}ETL i hurtownia{% endblock %}
+{% block title %}Przygotowanie danych — ETL{% endblock %}
+
+{% block page_info %}
+<h4>Pipeline medalionowy</h4>
+<p>Dane przechodzą przez trzy warstwy, każda z wyższą jakością:</p>
+<ul>
+  <li><strong>Raw</strong> — oryginalny plik CSV (Kaggle), bez zmian</li>
+  <li><strong>Silver</strong> — oczyszczone: usunięte duplikaty, outliery salary, puste job_title/location; dodane cechy <code>salary_k</code>, <code>high_skills</code>, <code>is_remote</code></li>
+  <li><strong>Gold</strong> — agregaty analityczne gotowe na dashboard (<code>salary_by_location</code>, <code>salary_by_location_industry</code>)</li>
+  <li><strong>Azure SQL</strong> — schemat gwiazdy: <code>fact_salaries</code>, <code>dim_job</code>, <code>dim_company</code>, <code>dim_time</code></li>
+</ul>
+
+<h4>Kiedy użyć każdego kroku</h4>
+<ul>
+  <li><strong>Krok 1 — Przygotowanie lokalne</strong>: pierwsza instalacja lub nowy plik CSV. Zapisuje silver + gold na dysku. Nie wymaga Azure.</li>
+  <li><strong>+ Eksportuj do Azure Lake</strong>: opcja do kroku 1 — wgrywa parquet do ADLS Gen2. Wymaga skonfigurowanego Azure Storage.</li>
+  <li><strong>Krok 2 — Ładowanie hurtowni</strong>: po kroku 1, gdy skonfigurowane Azure SQL. Tworzy/nadpisuje tabele wymiarów i faktów.</li>
+  <li><strong>Krok 3 — Pipeline pełny (Prefect)</strong>: gdy wszystko skonfigurowane. Uruchamia kroki 1–2 przez orkiestrację Prefect (lub synchronicznie jako fallback).</li>
+  <li><strong>Krok 3 bez SQL</strong>: jak wyżej, ale pomija załadowanie hurtowni. Użyteczny w środowisku Docker bez sterownika ODBC.</li>
+</ul>
+
+<h4>Wymagania — CSV</h4>
+<p>Plik musi zawierać kolumny:</p>
+<ul>
+  <li><code>job_title</code>, <code>experience_years</code>, <code>education_level</code>, <code>skills_count</code></li>
+  <li><code>industry</code>, <code>company_size</code>, <code>location</code>, <code>remote_work</code></li>
+  <li><code>certifications</code>, <code>salary</code></li>
+</ul>
+
+<h4>Wymagania — Azure</h4>
+<ul>
+  <li><strong>Storage (Lake)</strong>: <code>AZURE_STORAGE_ACCOUNT</code> + <code>AZURE_STORAGE_KEY</code> lub <code>AZURE_STORAGE_SAS_TOKEN</code></li>
+  <li><strong>SQL (DWH)</strong>: <code>AZURE_SQL_SERVER</code>, <code>AZURE_SQL_DATABASE</code>, <code>AZURE_SQL_USERNAME</code>, <code>AZURE_SQL_PASSWORD</code></li>
+</ul>
+
+<h4>Pliki wyjściowe</h4>
+<ul>
+  <li><code>data/processed/cleaned.parquet</code> — warstwa silver</li>
+  <li><code>data/processed/salary_by_location.parquet</code> — gold agregat 1</li>
+  <li><code>data/processed/salary_by_location_industry.parquet</code> — gold agregat 2</li>
+  <li><code>data/processed/prepare_summary.json</code> — podsumowanie kroku 1</li>
+  <li><code>data/processed/etl_summary.json</code> — podsumowanie pełnego ETL</li>
+  <li><code>data/processed/dwh_summary.json</code> — podsumowanie ładowania SQL</li>
+</ul>
+
+<h4>Schemat gwiazdy (Azure SQL)</h4>
+<ul>
+  <li><code>fact_salaries</code> — fakty: salary, klucze wymiarów</li>
+  <li><code>dim_job</code> — stanowisko, wykształcenie, umiejętności, certyfikaty</li>
+  <li><code>dim_company</code> — branża, wielkość firmy, praca zdalna</li>
+  <li><code>dim_time</code> — data ETL (jeden wiersz per uruchomienie)</li>
+</ul>
+
+<h4>Historia uruchomień</h4>
+<p>Każde uruchomienie przez Prefect jest rejestrowane w <a href="/prefect" target="_blank" class="app-link">Prefect UI ↗</a> — widoczne przepływy, logi i czasy wykonania.</p>
+{% endblock %}
+
 {% block content %}
-<h1>Przygotowanie danych (ETL)</h1>
-<p class="muted">
-  Pipeline: warstwa <strong>raw</strong> → <strong>silver</strong> → <strong>gold</strong> → opcjonalnie hurtownia Azure SQL.
-  Historie uruchomien i szczegoly zadan: <a href="/prefect" target="_blank" rel="noopener">Prefect UI</a>.
-  W kontenerze Docker bez ODBC uzyj <strong>ETL bez ladowania SQL</strong>.
-</p>
+<div class="page-header">
+  <div>
+    <h1>Przygotowanie danych (ETL)</h1>
+    <p class="muted" style="margin-top:0.25rem">Pipeline medalionowy: <strong>raw</strong> &rarr; <strong>silver</strong> &rarr; <strong>gold</strong> &rarr; <strong>Azure SQL</strong></p>
+  </div>
+  <a href="/prefect" target="_blank" rel="noopener" class="btn-secondary">Historia (Prefect) ↗</a>
+</div>
 
-<section class="status-grid">
-  <div class="status-item" data-path-key="raw_csv">
-    Plik CSV (raw):
-    <span class="path-local ok"{% if not paths.raw_csv_local %} style="display:none"{% endif %}>lokalny</span>
-    <span class="path-azure ok"{% if not paths.raw_csv_azure %} style="display:none"{% endif %}>Azure</span>
-    <span class="path-ok ok"{% if not paths.raw_csv %} style="display:none"{% endif %}>dostepny</span>
-    <span class="path-warn warn"{% if paths.raw_csv %} style="display:none"{% endif %}>brak</span>
-  </div>
-  <div class="status-item" data-path-key="silver">
-    Warstwa silver:
-    <span class="path-ok ok"{% if not paths.silver %} style="display:none"{% endif %}>dostepna</span>
-    <span class="path-warn warn"{% if paths.silver %} style="display:none"{% endif %}>brak</span>
-  </div>
-  <div class="status-item" data-path-key="gold">
-    Warstwa gold:
-    <span class="path-ok ok"{% if not paths.gold %} style="display:none"{% endif %}>dostepna</span>
-    <span class="path-warn warn"{% if paths.gold %} style="display:none"{% endif %}>brak</span>
-  </div>
-</section>
+{# ── Pasek ostatniego uruchomienia ── #}
+{% if last_run %}
+<div class="etl-last-run">
+  <span class="etl-last-run-label">Ostatnie uruchomienie:</span>
+  <span class="etl-last-run-time">{{ last_run.finished_at | replace("T"," ") | truncate(19, True, "") }} UTC</span>
+  {% if last_run.rows_out is defined %}
+  <span class="etl-last-run-stat">Silver: <strong>{{ "{:,}".format(last_run.rows_out) }}</strong> wierszy</span>
+  {% endif %}
+  {% if last_run.rows_in is defined %}
+  <span class="etl-last-run-stat">Raw: <strong>{{ "{:,}".format(last_run.rows_in) }}</strong> wierszy</span>
+  {% endif %}
+  {% if etl_summary and etl_summary.engine is defined %}
+  <span class="etl-last-run-stat">Silnik: <strong>{{ etl_summary.engine }}</strong></span>
+  {% endif %}
+</div>
+{% endif %}
 
-<section class="ops-panel">
-  <h2>Operacje ETL</h2>
+{# ── Pipeline wizualny ── #}
+<div class="etl-pipeline">
+  <div class="etl-step">
+    <p class="etl-step-name">Raw</p>
+    <p class="etl-step-label">Plik CSV</p>
+    <span class="etl-step-status" data-path-key="raw_csv">
+      {% if paths.raw_csv %}
+        {% if paths.raw_csv_local %}<span class="ok">&#10003; lokalny</span>{% endif %}
+        {% if paths.raw_csv_azure %}<span class="ok">&#10003; Azure Lake</span>{% endif %}
+      {% else %}
+        <span class="warn">&#9888; brak pliku CSV</span>
+      {% endif %}
+    </span>
+  </div>
+  <div class="etl-arrow">&rarr;</div>
+  <div class="etl-step">
+    <p class="etl-step-name">Silver</p>
+    <p class="etl-step-label">Oczyszczone dane</p>
+    <span class="etl-step-status" data-path-key="silver">
+      {% if paths.silver %}
+        <span class="ok">&#10003; cleaned.parquet</span>
+        {% if last_run and last_run.rows_out is defined %}
+        <br><span class="muted" style="font-size:0.75rem">{{ "{:,}".format(last_run.rows_out) }} wierszy</span>
+        {% endif %}
+      {% else %}
+        <span class="warn">&#9888; brak</span>
+      {% endif %}
+    </span>
+  </div>
+  <div class="etl-arrow">&rarr;</div>
+  <div class="etl-step">
+    <p class="etl-step-name">Gold</p>
+    <p class="etl-step-label">Agregaty analityczne</p>
+    <span class="etl-step-status" data-path-key="gold">
+      {% if paths.gold %}<span class="ok">&#10003; dostepna</span>{% else %}<span class="muted">&#9675; brak</span>{% endif %}
+    </span>
+  </div>
+  <div class="etl-arrow">&rarr;</div>
+  <div class="etl-step">
+    <p class="etl-step-name">Azure SQL</p>
+    <p class="etl-step-label">Hurtownia danych</p>
+    <span class="etl-step-status">
+      {% if dwh_summary and dwh_summary.verified %}
+        <span class="ok">&#10003; zaladowana</span>
+        {% set total = dwh_summary.verified.values() | list | sum %}
+        <br><span class="muted" style="font-size:0.75rem">~{{ "{:,}".format(total) }} wierszy</span>
+      {% elif dwh_summary and dwh_summary.finished_at %}
+        <span class="ok">&#10003; zaladowana</span>
+      {% else %}
+        <span class="muted">&#9675; nie zaladowana</span>
+      {% endif %}
+    </span>
+  </div>
+</div>
+
+{# ── Podsumowanie DWH (jeśli dostępne) ── #}
+{% if dwh_summary and dwh_summary.verified %}
+<div class="etl-dwh-summary">
+  <span class="etl-dwh-summary-label">Azure SQL — ostatni load:</span>
+  {% for table, cnt in dwh_summary.verified.items() %}
+  <span class="etl-dwh-summary-item"><code>{{ table }}</code> {{ "{:,}".format(cnt) }}</span>
+  {% endfor %}
+  <span class="muted" style="font-size:0.78rem">{{ dwh_summary.finished_at | replace("T"," ") | truncate(19, True, "") }} UTC</span>
+</div>
+{% endif %}
+
+{# ── Pasek postępu + log ── #}
+<section class="ops-panel" style="margin-top:1.5rem">
   <div class="progress-wrap">
     <div class="progress-bar" id="job-progress-bar" style="width:0%"></div>
   </div>
   <div id="job-status" class="job-status muted">Gotowy do uruchomienia</div>
-  <pre id="job-log" class="job-log" data-placeholder="Dziennik operacji ETL — uruchom zadanie przyciskiem powyzej. Po starcie pojawi sie szczegolowy przebieg (raw, silver, gold, SQL).">Dziennik operacji ETL — uruchom zadanie przyciskiem powyzej. Po starcie pojawi sie szczegolowy przebieg (raw, silver, gold, SQL).</pre>
-  <div class="btn-row">
-    <button type="button" class="btn-primary" data-job="prepare" data-skip-reload data-refresh="paths">1. Przygotowanie danych (lokalnie)</button>
-    <button type="button" class="btn-secondary" data-job="prepare_lake" data-skip-reload data-refresh="paths">Eksport do Azure Data Lake</button>
-    <button type="button" class="btn-secondary" data-job="load_dwh" data-skip-reload data-refresh="paths">2. Ladowanie hurtowni (Azure SQL)</button>
-  </div>
-  <div class="btn-row">
-    <button type="button" class="btn-primary" data-job="etl" data-skip-reload data-refresh="paths">3. Pipeline ETL pelny (z SQL)</button>
-    <button type="button" class="btn-secondary" data-job="etl_skip_sql" data-skip-reload data-refresh="paths">Pipeline ETL bez SQL (Docker)</button>
-  </div>
+  <pre id="job-log" class="job-log" data-placeholder="Dziennik operacji ETL — wybierz krok ponizej.">Dziennik operacji ETL — wybierz krok ponizej.</pre>
+
+  {# ── Karty kroków ── #}
+  <div class="etl-op-cards">
+
+    {# Krok 1 #}
+    <div class="etl-op-card etl-op-card--blue">
+      <div class="etl-op-card-header">
+        <span class="etl-op-card-step">Krok 1</span>
+        <span class="etl-op-card-title">Przygotowanie danych</span>
+        <span class="etl-op-card-badge etl-op-card-badge--req">Wymaga: Raw CSV</span>
+        <span class="etl-op-card-badge etl-op-card-badge--out">Tworzy: silver + gold</span>
+      </div>
+      <p class="etl-op-card-desc">
+        Wczytuje plik CSV, czyści dane (kwantyle salary, duplikaty, puste wartości),
+        tworzy warstwę silver i agregaty gold na dysku lokalnym.
+      </p>
+      <div class="etl-op-card-actions">
+        <button type="button" class="btn-primary"
+          data-job="prepare" data-skip-reload data-refresh="paths"
+          {% if not paths.raw_csv %}disabled title="Brak pliku CSV"{% endif %}>
+          Przygotuj lokalnie
+        </button>
+        <button type="button" class="btn-secondary"
+          data-job="prepare_lake" data-skip-reload data-refresh="paths"
+          {% if not paths.raw_csv %}disabled title="Brak pliku CSV"{% endif %}>
+          + Eksportuj do Azure Lake
+        </button>
+      </div>
+    </div>
+
+    {# Krok 2 #}
+    <div class="etl-op-card etl-op-card--purple">
+      <div class="etl-op-card-header">
+        <span class="etl-op-card-step">Krok 2</span>
+        <span class="etl-op-card-title">Załaduj do hurtowni</span>
+        <span class="etl-op-card-badge etl-op-card-badge--req">Wymaga: Silver + Azure SQL</span>
+        <span class="etl-op-card-badge etl-op-card-badge--out">Tworzy: tabele dim/fact w SQL</span>
+      </div>
+      <p class="etl-op-card-desc">
+        Buduje schemat gwiazdy (<code>fact_salaries</code>, <code>dim_job</code>, <code>dim_company</code>, <code>dim_time</code>)
+        i ładuje dane do Azure SQL Database. Wymaga skonfigurowanych zmiennych <code>AZURE_SQL_*</code> w <code>.env</code>.
+      </p>
+      <div class="etl-op-card-actions">
+        <button type="button" class="btn-primary"
+          data-job="load_dwh" data-skip-reload data-refresh="paths"
+          {% if not paths.silver %}disabled title="Brak warstwy silver — uruchom Krok 1"{% endif %}>
+          Załaduj do Azure SQL
+        </button>
+        {% if not paths.silver %}
+        <span class="etl-op-card-hint">&#9888; Uruchom najpierw Krok 1</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Krok 3 #}
+    <div class="etl-op-card etl-op-card--green">
+      <div class="etl-op-card-header">
+        <span class="etl-op-card-step">Krok 3</span>
+        <span class="etl-op-card-title">Pełny pipeline (Prefect)</span>
+        <span class="etl-op-card-badge etl-op-card-badge--req">Wymaga: Raw CSV</span>
+        <span class="etl-op-card-badge etl-op-card-badge--out">Tworzy: silver + gold + SQL</span>
+      </div>
+      <p class="etl-op-card-desc">
+        Uruchamia całą sekwencję (Krok 1 + Krok 2) w jednym przebiegu przez orkiestrację Prefect.
+        Przy braku Prefect Server przełącza się automatycznie na tryb synchroniczny.
+      </p>
+      <div class="etl-op-card-actions">
+        <button type="button" class="btn-primary"
+          data-job="etl" data-skip-reload data-refresh="paths"
+          {% if not paths.raw_csv %}disabled title="Brak pliku CSV"{% endif %}>
+          Uruchom z SQL
+        </button>
+        <button type="button" class="btn-secondary"
+          data-job="etl_skip_sql" data-skip-reload data-refresh="paths"
+          {% if not paths.raw_csv %}disabled title="Brak pliku CSV"{% endif %}>
+          Uruchom bez SQL
+          <span style="font-size:0.75em;opacity:0.7">(Docker / offline)</span>
+        </button>
+      </div>
+    </div>
+
+  </div>{# /etl-op-cards #}
 </section>
 {% endblock %}
+
 {% block scripts %}
 <script src="/static/js/operations.js"></script>
 {% endblock %}

@@ -1,14 +1,71 @@
 {% extends "base.html" %}
-{% block title %}Trening modelu{% endblock %}
+{% block title %}Model i wersjonowanie{% endblock %}
+
+{% block page_info %}
+<h4>Model XGBoost</h4>
+<p>Regresja na warstwie silver. Hiperparametry (learning rate, max depth, n_estimators) dobierane przez <strong>GridSearchCV</strong> i logowane w MLflow.</p>
+<h4>Metryki</h4>
+<ul>
+  <li><strong>RMSE</strong> — pierwiastek z błędu kwadratowego (niższy = lepszy)</li>
+  <li><strong>MAE</strong> — średni błąd absolutny w USD</li>
+  <li><strong>MAPE</strong> — procentowy błąd względny</li>
+  <li><strong>R²</strong> — współczynnik determinacji (0–1, wyższy = lepszy)</li>
+</ul>
+<h4>MLflow</h4>
+<p>Każdy trening tworzy nowy experiment run z parametrami, metrykami i artefaktami modelu. Modele trafiają do <strong>Model Registry</strong>.</p>
+<h4>DVC</h4>
+<p>Wersjonowanie danych i modeli z zdalnym storage w <strong>Azure Blob Storage</strong>. Polecenia <code>dvc push/pull</code> synchronizują artefakty między środowiskami.</p>
+<h4>Artefakty</h4>
+<ul>
+  <li><code>models/salary_model.pkl</code> — wytrenowany model</li>
+  <li><code>models/preprocessor.pkl</code> — pipeline sklearn</li>
+  <li><code>models/training_baseline.parquet</code> — dane bazowe dla driftu</li>
+</ul>
+{% endblock %}
+
 {% block content %}
-<h1>Trening modelu (XGBoost + MLflow)</h1>
+<h1>Model i wersjonowanie</h1>
+<p class="muted">Trening XGBoost z logowaniem eksperymentow do MLflow oraz pipeline DVC do wersjonowania artefaktow.</p>
 
 <section class="status-grid">
-  <div class="status-item">Warstwa silver: {% if paths.silver %}<span class="ok">dostepna</span>{% else %}<span class="warn">wymagana</span>{% endif %}</div>
-  <div class="status-item">Model produkcyjny: {% if paths.model %}<span class="ok">zaladowany</span>{% else %}<span class="warn">brak</span>{% endif %}</div>
+  <div class="status-item">Warstwa silver: {% if paths.silver %}<span class="ok">dostepna</span>{% else %}<span class="warn">wymagana — uruchom ETL</span>{% endif %}</div>
+  <div class="status-item">Model produkcyjny: {% if paths.model %}<span class="ok">zaladowany</span>{% else %}<span class="warn">brak — uruchom trening</span>{% endif %}</div>
 </section>
 
-<section class="ops-panel tuning-panel">
+{% if metrics %}
+<div class="kpi-grid" style="margin-top:1.25rem">
+  {% if metrics.rmse is defined %}
+  <div class="kpi-card">
+    <p class="kpi-label">RMSE</p>
+    <p class="kpi-value">{{ "$%s"|format("{:,.0f}".format(metrics.rmse)) }}</p>
+    <p class="kpi-sub">blad predykcji (USD)</p>
+  </div>
+  {% endif %}
+  {% if metrics.mae is defined %}
+  <div class="kpi-card">
+    <p class="kpi-label">MAE</p>
+    <p class="kpi-value">{{ "$%s"|format("{:,.0f}".format(metrics.mae)) }}</p>
+    <p class="kpi-sub">sredni blad bezwzgledny</p>
+  </div>
+  {% endif %}
+  {% if metrics.mape_pct is defined %}
+  <div class="kpi-card">
+    <p class="kpi-label">MAPE</p>
+    <p class="kpi-value">{{ "%.1f%%"|format(metrics.mape_pct) }}</p>
+    <p class="kpi-sub">blad wzgledny</p>
+  </div>
+  {% endif %}
+  {% if metrics.r2 is defined %}
+  <div class="kpi-card">
+    <p class="kpi-label">R&sup2;</p>
+    <p class="kpi-value">{{ "%.4f"|format(metrics.r2) }}</p>
+    <p class="kpi-sub">wspolczynnik determinacji</p>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<section class="ops-panel tuning-panel" style="margin-top:1.25rem">
   <h2>Parametry strojenia hiperparametrow</h2>
   <p class="muted">Siatka wartosci (oddzielone przecinkami). Zapis trafia do pliku <code>params.yaml</code>.</p>
   <form id="tuning-form" class="tuning-form">
@@ -16,7 +73,7 @@
       <legend>Ogolne</legend>
       <label class="tuning-check">
         <input type="checkbox" id="tuning-enabled" {% if tuning_enabled %}checked{% endif %}>
-        Strojenie wlaczone (GridSearchCV)
+        Strojenie wlaczone (przeszukiwanie siatki)
       </label>
     </fieldset>
     <fieldset class="tuning-fieldset">
@@ -52,20 +109,45 @@
     <button type="button" class="btn-primary" id="btn-train">Trening z strojeniem</button>
     <button type="button" class="btn-secondary" id="btn-train-fast">Trening szybki (bez strojenia)</button>
     <button type="button" class="btn-secondary" onclick="fetch('/api/model/reload',{method:'POST'}).then(()=>location.reload())">Przeladuj model w API</button>
-    <a class="btn-secondary" href="/mlflow" target="_blank" rel="noopener">MLflow UI</a>
+    <a class="btn-secondary" href="/mlflow" target="_blank" rel="noopener">MLflow ↗</a>
   </div>
 </section>
 
-{% if metrics %}
-<section class="info-box">
-  <h2>Ostatnie metryki</h2>
-  <ul>
-    {% for k, v in metrics.items() %}
-    <li><strong>{{ k }}</strong>: {{ v }}</li>
+<details style="margin-top:1.5rem">
+  <summary style="cursor:pointer;font-weight:700;font-size:1rem;padding:0.75rem 0;border-top:1px solid #2a3548;list-style:none;display:flex;align-items:center;gap:0.5rem">
+    <span>&#9660;</span> Wersjonowanie DVC
+    <span class="muted" style="font-size:0.85rem;font-weight:400">— pipeline prepare &rarr; train, push artefaktow na Azure</span>
+  </summary>
+
+  <section class="status-grid" style="margin-top:1rem">
+    <div class="status-item" data-path-key="raw_csv">
+      Plik CSV (raw):
+      <span class="path-local ok"{% if not paths.raw_csv_local %} style="display:none"{% endif %}>lokalny</span>
+      <span class="path-azure ok"{% if not paths.raw_csv_azure %} style="display:none"{% endif %}>Azure</span>
+      <span class="path-warn warn"{% if paths.raw_csv %} style="display:none"{% endif %}>brak</span>
+    </div>
+    <div class="status-item">Metryki pipeline: {% if dvc_metrics %}<span class="ok">zapisane</span>{% else %}<span class="warn">uruchom reprodukcje</span>{% endif %}</div>
+  </section>
+
+  {% if dvc_metrics %}
+  <div class="kpi-grid" style="margin-top:1rem">
+    {% for k, v in dvc_metrics.items() %}
+    <div class="kpi-card">
+      <p class="kpi-label">{{ k }}</p>
+      <p class="kpi-value" style="font-size:1.1rem">{{ v }}</p>
+    </div>
     {% endfor %}
-  </ul>
-</section>
-{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="btn-row" style="margin-top:1rem">
+    <button type="button" class="btn-primary" data-job="dvc_repro">Reprodukcja pipeline (pelna)</button>
+    <button type="button" class="btn-secondary" data-job="dvc_repro_fast">Reprodukcja szybka</button>
+    <button type="button" class="btn-secondary" data-job="dvc_repro_push">Reprodukcja + push</button>
+    <button type="button" class="btn-secondary" data-job="dvc_push" data-skip-reload>Push artefaktow</button>
+  </div>
+  <p class="muted" style="font-size:0.85rem;margin-top:0.75rem">Wynik operacji pojawi sie w logu treningu powyzej.</p>
+</details>
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/operations.js"></script>

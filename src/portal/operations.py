@@ -50,7 +50,14 @@ def run_prepare(*, upload_lake: bool = False) -> dict[str, Any]:
         f"({len(raw):,} wierszy)"
     )
     progress(30, "Przygotowanie — czyszczenie i silver")
-    silver, stats = clean_dataframe(raw)
+    params = load_params_file()
+    prepare_cfg = params.get("prepare", {})
+    silver, stats = clean_dataframe(
+        raw,
+        salary_quantile_low=prepare_cfg.get("salary_quantile_low", 0.01),
+        salary_quantile_high=prepare_cfg.get("salary_quantile_high", 0.99),
+        max_experience_years=prepare_cfg.get("max_experience_years", 40),
+    )
     PROCESSED.mkdir(parents=True, exist_ok=True)
     silver.to_parquet(SILVER, index=False)
 

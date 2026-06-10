@@ -1,32 +1,119 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — Job Salary Portal{% endblock %}
+
+{% block page_info %}
+<h4>Co pokazuje dashboard</h4>
+<p>Wykresy oparte na warstwie <strong>silver</strong> — oczyszczonych danych (kwantyle 1–99% wynagrodzenia, bez duplikatów). Opcjonalnie uzupełniane licznikami z <strong>Azure SQL</strong>.</p>
+<h4>Sekcje</h4>
+<ul>
+  <li><strong>Rynek pracy</strong> — średnie pensje wg lokalizacji (top 10) oraz rozkład wynagrodzeń</li>
+  <li><strong>Cechy pracownika</strong> — wykształcenie, lata doświadczenia, top stanowiska</li>
+  <li><strong>Struktura firm</strong> — branża, wielkość firmy, forma pracy zdalnej</li>
+</ul>
+<h4>Karty KPI</h4>
+<ul>
+  <li><strong>Rekordów</strong> — liczba ofert w warstwie silver</li>
+  <li><strong>Średnia / Mediana pensji</strong> — obliczone na całym zbiorze</li>
+  <li><strong>Źródło</strong> — skąd pobrano dane (silver, SQL, gold lub raw CSV)</li>
+</ul>
+<h4>Odświeżanie</h4>
+<p>Dane odświeżają się przy każdym wejściu na stronę. Przycisk <strong>Odśwież</strong> pobiera najnowsze dane bez przeładowania strony.</p>
+{% endblock %}
+
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 {% endblock %}
 {% block content %}
-<h1>Dashboard analityczny</h1>
-<div class="btn-row">
-  <button type="button" class="btn-secondary" onclick="loadDashboard()">Odswiez wykresy</button>
-  <a class="btn-secondary" href="{{ mlflow_url }}" target="_blank" rel="noopener">MLflow</a>
-  <a class="btn-secondary" href="/prefect" target="_blank" rel="noopener">Prefect UI</a>
-  <a class="btn-secondary" href="/docs/etl">ETL</a>
+<div class="page-header">
+  <h1>Dashboard analityczny</h1>
+  <div class="btn-row">
+    <button type="button" class="btn-secondary" onclick="loadDashboard()">&#8635; Odswiez</button>
+    <a class="btn-secondary" href="{{ mlflow_url }}" target="_blank" rel="noopener">MLflow ↗</a>
+    <a class="btn-secondary" href="/etl">ETL</a>
+  </div>
 </div>
-<p id="data-source" class="muted">Ladowanie danych...</p>
+
+<div class="kpi-grid" id="kpi-grid">
+  <div class="kpi-card kpi-card--blue">
+    <p class="kpi-label">Rekordow</p>
+    <p class="kpi-value" id="kpi-records">&#8212;</p>
+    <p class="kpi-sub">ofert pracy w silver</p>
+  </div>
+  <div class="kpi-card kpi-card--green">
+    <p class="kpi-label">Srednia pensja</p>
+    <p class="kpi-value" id="kpi-avg">&#8212;</p>
+    <p class="kpi-sub">USD rocznie</p>
+  </div>
+  <div class="kpi-card kpi-card--purple">
+    <p class="kpi-label">Mediana pensji</p>
+    <p class="kpi-value" id="kpi-median">&#8212;</p>
+    <p class="kpi-sub">USD rocznie</p>
+  </div>
+  <div class="kpi-card kpi-card--cyan">
+    <p class="kpi-label">Zrodlo danych</p>
+    <p class="kpi-value kpi-value--sm" id="kpi-source">&#8212;</p>
+    <p class="kpi-sub" id="kpi-source-hint">Ladowanie...</p>
+  </div>
+</div>
+
+
+<h2 class="chart-section-title">Rynek pracy</h2>
+<div class="chart-row chart-row--asymmetric">
+  <div class="chart-box chart-box--tall">
+    <h3 class="chart-title">Srednia pensja wg lokalizacji (top 10)</h3>
+    <div class="chart-loading"><span>Ladowanie...</span></div>
+    <canvas id="chartLocation"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3 class="chart-title">Rozklad wynagrodzen</h3>
+    <div class="chart-loading"><span>Ladowanie...</span></div>
+    <canvas id="chartSalaryDist"></canvas>
+  </div>
+</div>
+
+<h2 class="chart-section-title">Cechy pracownika</h2>
 <div class="chart-row">
-  <div class="chart-box"><h3 class="chart-title">Pensja wg lokalizacji</h3><canvas id="chartLocation"></canvas></div>
-  <div class="chart-box"><h3 class="chart-title">Pensja wg wyksztalcenia</h3><canvas id="chartEducation"></canvas></div>
+  <div class="chart-box">
+    <h3 class="chart-title">Pensja wg wyksztalcenia</h3>
+    <div class="chart-loading"><span>Ladowanie...</span></div>
+    <canvas id="chartEducation"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3 class="chart-title">Pensja wg doswiadczenia</h3>
+    <div class="chart-loading"><span>Ladowanie...</span></div>
+    <canvas id="chartExperience"></canvas>
+  </div>
+</div>
+<div class="chart-row chart-row--full">
+  <div class="chart-box chart-box--tall">
+    <h3 class="chart-title">Top 10 stanowisk wg sredniej pensji</h3>
+    <div class="chart-loading"><span>Ladowanie...</span></div>
+    <canvas id="chartJobTitle"></canvas>
+  </div>
+</div>
+
+<h2 class="chart-section-title">Struktura firm</h2>
+<div class="chart-row chart-row--asymmetric">
+  <div class="chart-box chart-box--tall">
+    <h3 class="chart-title">Pensja wg branzy</h3>
+    <div class="chart-loading"><span>Ladowanie...</span></div>
+    <canvas id="chartIndustry"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3 class="chart-title">Pensja wg wielkosci firmy</h3>
+    <div class="chart-loading"><span>Ladowanie...</span></div>
+    <canvas id="chartCompany"></canvas>
+  </div>
 </div>
 <div class="chart-row">
-  <div class="chart-box"><h3 class="chart-title">Pensja wg branzy</h3><canvas id="chartIndustry"></canvas></div>
-  <div class="chart-box"><h3 class="chart-title">Pensja wg wielkosci firmy</h3><canvas id="chartCompany"></canvas></div>
-</div>
-<div class="chart-row">
-  <div class="chart-box"><h3 class="chart-title">Praca zdalna</h3><canvas id="chartRemote"></canvas></div>
-  <div class="chart-box"><h3 class="chart-title">Doswiadczenie (lata)</h3><canvas id="chartExperience"></canvas></div>
-</div>
-<div class="chart-row">
-  <div class="chart-box"><h3 class="chart-title">Top stanowiska</h3><canvas id="chartJobTitle"></canvas></div>
-  <div class="chart-box"><h3 class="chart-title">Rozklad pensji</h3><canvas id="chartSalaryDist"></canvas></div>
+  <div class="chart-box chart-box--short">
+    <h3 class="chart-title">Praca zdalna vs stacjonarna</h3>
+    <div class="chart-loading"><span>Ladowanie...</span></div>
+    <canvas id="chartRemote"></canvas>
+  </div>
+  <div class="chart-box chart-box--short" style="display:flex;align-items:center;justify-content:center;background:transparent;border-color:transparent">
+    <p class="muted" style="text-align:center;font-size:0.85rem;max-width:220px">Dane z warstwy silver &mdash; oczyszczone i bez outlierow (kwantyle 1&ndash;99%).</p>
+  </div>
 </div>
 {% endblock %}
 {% block scripts %}

@@ -76,6 +76,12 @@ def _aggregates_from_silver(silver: pd.DataFrame) -> dict[str, Any]:
                     }
                 )
 
+    overall: dict[str, Any] = {}
+    if "salary" in silver.columns and len(silver) > 0:
+        overall["avg_salary"] = _sanitize_value(silver["salary"].mean())
+        overall["median_salary"] = _sanitize_value(silver["salary"].median())
+        overall["total_records"] = int(len(silver))
+
     return {
         "by_location": _records(by_location),
         "by_education": _records(by_education),
@@ -86,6 +92,7 @@ def _aggregates_from_silver(silver: pd.DataFrame) -> dict[str, Any]:
         "by_job_title": _records(by_job_title),
         "salary_distribution": salary_bins,
         "table_counts": {"fact_rows": int(len(silver))},
+        "overall": overall,
     }
 
 
@@ -234,6 +241,7 @@ def fetch_from_sql_only() -> dict[str, Any]:
         "by_job_title": _records(by_job_title),
         "salary_distribution": salary_distribution,
         "table_counts": table_counts,
+        "overall": {},
     }
 
 
@@ -260,6 +268,7 @@ def fetch_from_local_fallback() -> dict[str, Any]:
             "by_job_title": [],
             "salary_distribution": [],
             "table_counts": {},
+            "overall": {},
         }
 
     raw_path = local_raw_data_path()
@@ -293,6 +302,7 @@ def _empty_data(error: str) -> dict[str, Any]:
         "by_job_title": [],
         "salary_distribution": [],
         "table_counts": {},
+        "overall": {},
     }
 
 
