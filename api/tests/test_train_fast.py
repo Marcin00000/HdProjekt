@@ -39,12 +39,17 @@ def _silver_frame(n: int = 120) -> pd.DataFrame:
 def test_train_fast_sets_combinations_tested(
     _cfg, _exp, mock_fit, _reg, _dump,
 ):
-    mock_fit.return_value = (
-        MagicMock(),
-        {"rmse": 1.0, "mae": 1.0, "mape_pct": 1.0, "rmse_pct_of_mean": 1.0, "median_ae": 1.0, "r2": 0.9},
-        "run-1",
-        "runs:/x/model",
-    )
+    def side_effect(X_train, X_val, y_train, y_val, hyperparams, defaults, preprocessor):
+        preprocessor.fit(X_train, y_train)
+        mock_model = MagicMock()
+        mock_model.predict.side_effect = lambda X: np.ones(len(X)) * 100000.0
+        return (
+            mock_model,
+            {"rmse": 1.0, "mae": 1.0, "mape_pct": 1.0, "rmse_pct_of_mean": 1.0, "median_ae": 1.0, "r2": 0.9},
+            "run-1",
+            "runs:/x/model",
+        )
+    mock_fit.side_effect = side_effect
     bundle = train_xgboost(
         _silver_frame(),
         params={"random_state": 42, "test_size": 0.2, "n_estimators": 10, "max_depth": 3, "learning_rate": 0.1},
