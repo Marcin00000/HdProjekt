@@ -18,44 +18,46 @@ from prefect import flow, get_run_logger, task
 
 from src.cleaning.preprocess import CleaningStats, build_gold_aggregates, clean_dataframe
 from src.config import AzureStorageConfig, PROJECT_ROOT
-from src.etl.lake_io import read_raw_csv, write_parquet
+from src.etl.lake_io import write_parquet
 from src.etl.load_dwh import build_star_schema, get_sql_engine, load_to_azure_sql, verify_load
 
 
 @task(retries=3, retry_delay_seconds=[5, 15, 30])
-def verify_raw() -> dict[str, Any]:
-    """Sprawdza dostepnosc pliku raw w Data Lake i minimalna liczbe wierszy."""
+def verify_raw() -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Wczytuje i weryfikuje plik raw (lokalny lub Azure Data Lake)."""
     logger = get_run_logger()
-    cfg = AzureStorageConfig()
 
-    from adlfs import AzureBlobFileSystem
+    # Uzywa tej samej logiki co run_prepare / etl_sync — priorytet: lokalny, potem lake
+    from src.portal.data_loader import load_raw_with_source
 
-    fs = AzureBlobFileSystem(
-        account_name=cfg.account_name,
-        account_key=cfg.account_key,
-    )
-    blob = f"{cfg.container}/{cfg.raw_path}"
-    if not fs.exists(blob):
-        raise FileNotFoundError(f"Brak pliku raw w lake: {blob}")
-
-    raw = read_raw_csv(cfg)
+    raw, source = load_raw_with_source()
     if len(raw) < 1000:
         raise ValueError(f"Za malo wierszy w raw: {len(raw)}")
 
     info = {
-        "raw_path": cfg.raw_path,
+        "source": source,
         "rows": len(raw),
         "columns": list(raw.columns),
     }
     logger.info("verify_raw OK: %s", info)
-    return info
+    return raw, info
 
 
 @task(retries=2, retry_delay_seconds=10)
 def clean_to_silver(raw: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
     """Czyszczenie i zapis warstwy silver (lake + lokalnie)."""
     logger = get_run_logger()
-    silver, stats = clean_dataframe(raw)
+
+    # Parametry czyszczenia z params.yaml — spojna z run_prepare i etl_sync
+    from src.portal.params_io import load_params_file
+
+    prep = load_params_file().get("prepare", {})
+    silver, stats = clean_dataframe(
+        raw,
+        salary_quantile_low=float(prep.get("salary_quantile_low", 0.01)),
+        salary_quantile_high=float(prep.get("salary_quantile_high", 0.99)),
+        max_experience_years=int(prep.get("max_experience_years", 40)),
+    )
 
     if silver.isnull().sum().sum() != 0:
         raise ValueError("Silver zawiera braki po czyszczeniu")
@@ -108,6 +110,11 @@ def load_star_schema_sql(silver: pd.DataFrame) -> dict[str, Any]:
     loaded = load_to_azure_sql(tables, engine)
     verified = verify_load(engine)
 
+    for table, expected in loaded.items():
+        actual = verified.get(table, 0)
+        if actual != expected:
+            logger.warning("UWAGA: %s — zaladowano %d, w SQL: %d", table, expected, actual)
+
     result = {"loaded": loaded, "verified": verified}
     logger.info("load_star_schema_sql: %s", result)
     return result
@@ -117,13 +124,13 @@ def load_star_schema_sql(silver: pd.DataFrame) -> dict[str, Any]:
 def etl_main(skip_sql: bool = False) -> dict[str, Any]:
     """
     Pelny pipeline ETL:
-    raw (lake) -> silver -> gold -> Azure SQL (hurtownia).
+    raw (lokalny lub lake) -> silver -> gold -> Azure SQL (hurtownia).
     """
     logger = get_run_logger()
     started = datetime.now(timezone.utc).isoformat()
 
-    raw_info = verify_raw()
-    raw = read_raw_csv(AzureStorageConfig())
+    # verify_raw zwraca (DataFrame, info) — brak podwojnego wczytywania raw
+    raw, raw_info = verify_raw()
 
     silver, cleaning_stats = clean_to_silver(raw)
     gold_info = build_gold(silver)

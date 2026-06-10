@@ -12,11 +12,21 @@ GOLD_BY_LOCATION = PROJECT_ROOT / "data" / "processed" / "salary_by_location.par
 
 
 def load_raw_with_source() -> tuple[pd.DataFrame, str]:
-    """CSV lokalny, w razie braku — Azure Data Lake (raw)."""
+    """CSV lokalny (input/), w razie braku — Azure Data Lake (raw)."""
     local = find_local_raw_csv()
     if local is not None:
         return pd.read_csv(local), "local"
-    cfg = AzureStorageConfig()
+
+    # Sprawdz czy Azure jest w ogole skonfigurowany zanim sprobujesz polaczyc
+    try:
+        cfg = AzureStorageConfig()
+    except ValueError:
+        raise FileNotFoundError(
+            "Brak pliku CSV: umieść job_salary_prediction_dataset.csv w katalogu input/ "
+            "lub skonfiguruj Azure Storage (AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY, "
+            "AZURE_CONTAINER w .env)."
+        )
+
     return read_raw_csv(cfg), "azure"
 
 

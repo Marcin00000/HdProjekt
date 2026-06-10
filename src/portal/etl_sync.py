@@ -13,22 +13,34 @@ from src.cleaning.preprocess import clean_dataframe
 from src.config import AzureStorageConfig, PROJECT_ROOT
 from src.etl.lake_io import write_parquet
 from src.etl.load_dwh import build_star_schema, get_sql_engine, load_to_azure_sql, verify_load
-from src.portal.data_loader import load_raw_with_source, load_silver_dataframe
+from src.portal.data_loader import load_raw_with_source
 from src.portal.job_context import log, progress
 
 PROCESSED = PROJECT_ROOT / "data" / "processed"
 
 
 def _can_use_sql() -> bool:
+    """Sprawdza czy konfiguracja Azure SQL jest kompletna i silnik moze byc zainicjowany."""
+    # Krok 1: walidacja konfiguracji (.env / zmienne srodowiskowe)
     try:
         from src.config import AzureSqlConfig
 
         AzureSqlConfig().sqlalchemy_url()
+    except (ImportError, ValueError, KeyError):
+        # Brak wymaganych zmiennych srodowiskowych — nie jest bledem operacyjnym
+        return False
+
+    # Krok 2: inicjalizacja silnika (np. brak sterownika ODBC)
+    try:
         from src.etl.load_dwh import get_sql_engine
 
         get_sql_engine()
         return True
-    except Exception:
+    except Exception as exc:
+        log(
+            f"Nie mozna zainicjowac silnika SQL ({type(exc).__name__}: {exc})"
+            " — SQL zostanie pominiete."
+        )
         return False
 
 
@@ -66,7 +78,17 @@ def run_etl_sync(*, skip_sql: bool = False, upload_lake: bool = True) -> dict[st
     log(f"  Kolumny: {', '.join(str(c) for c in raw.columns[:12])}{'...' if len(raw.columns) > 12 else ''}")
 
     progress(25, "ETL — oczyszczenie i zapis silver")
-    silver, stats = clean_dataframe(raw)
+
+    # Parametry czyszczenia z params.yaml — spojna z run_prepare i flows.py
+    from src.portal.params_io import load_params_file
+
+    prep = load_params_file().get("prepare", {})
+    silver, stats = clean_dataframe(
+        raw,
+        salary_quantile_low=float(prep.get("salary_quantile_low", 0.01)),
+        salary_quantile_high=float(prep.get("salary_quantile_high", 0.99)),
+        max_experience_years=int(prep.get("max_experience_years", 40)),
+    )
     if silver.isnull().sum().sum() != 0:
         raise ValueError("Silver zawiera braki po czyszczeniu")
 
@@ -110,8 +132,8 @@ def run_etl_sync(*, skip_sql: bool = False, upload_lake: bool = True) -> dict[st
             progress(75, "ETL — ladowanie hurtowni Azure SQL")
             log("Budowa schematu gwiazdy i ladowanie do Azure SQL...")
             try:
-                silver_sql = load_silver_dataframe()
-                tables = build_star_schema(silver_sql)
+                # Uzyj silver z pamieci zamiast ponownego wczytywania z dysku
+                tables = build_star_schema(silver)
                 engine = get_sql_engine()
                 loaded = load_to_azure_sql(tables, engine)
                 from src.etl.load_dwh import verify_load

@@ -38,6 +38,8 @@ def _strip_strings(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     for col in out.select_dtypes(include=["object", "string"]).columns:
         out[col] = out[col].astype(str).str.strip()
+        # astype(str) zamienia NaN na literalny "nan" — przywroc pd.NA
+        out[col] = out[col].replace({"nan": pd.NA, "None": pd.NA, "<NA>": pd.NA, "": pd.NA})
     return out
 
 
@@ -71,8 +73,8 @@ def clean_dataframe(
         | (work["experience_years"] > max_experience_years)
         | (work["skills_count"] < 0)
         | (work["certifications"] < 0)
-        | work["job_title"].eq("")
-        | work["location"].eq("")
+        | work["job_title"].isna()
+        | work["location"].isna()
     )
     invalid_removed = int(invalid_mask.sum())
     work = work.loc[~invalid_mask]
