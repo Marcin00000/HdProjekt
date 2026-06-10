@@ -2,24 +2,38 @@
 {% block title %}Model i wersjonowanie{% endblock %}
 
 {% block page_info %}
-<h4>Model XGBoost</h4>
-<p>Regresja na warstwie silver. Hiperparametry (learning rate, max depth, n_estimators) dobierane przez <strong>GridSearchCV</strong> i logowane w MLflow.</p>
-<h4>Metryki</h4>
+<h4>Model Predykcyjny (XGBoost Regressor)</h4>
+<p>Do prognozowania zarobków wykorzystano algorytm <strong>XGBoost Regressor</strong> (Extreme Gradient Boosting), który jest obecnie wiodącą metodą uczenia maszynowego dla ustrukturyzowanych danych tabelarycznych. Model budowany jest na danych z warstwy <strong>Silver</strong>.</p>
+
+<h4>Eliminacja Data Leakage i Podział Danych</h4>
+<p>W celu uniknięcia błędu przeuczenia i fałszywie zawyżonych metryk wprowadzono rygorystyczny podział zbioru danych na 3 części:</p>
 <ul>
-  <li><strong>RMSE</strong> — pierwiastek z błędu kwadratowego (niższy = lepszy)</li>
-  <li><strong>MAE</strong> — średni błąd absolutny w USD</li>
-  <li><strong>MAPE</strong> — procentowy błąd względny</li>
-  <li><strong>R²</strong> — współczynnik determinacji (0–1, wyższy = lepszy)</li>
+  <li><strong>Zbiór Treningowy (64%)</strong>: służy bezpośrednio do uczenia estymatorów drzewiastych XGBoost.</li>
+  <li><strong>Zbiór Walidacyjny (16%)</strong>: służy do oceny kolejnych kombinacji hiperparametrów w trakcie przeszukiwania siatki (Grid Search) oraz do wczesnego zatrzymywania uczenia (Early Stopping).</li>
+  <li><strong>Zbiór Testowy (20%)</strong>: odizolowany, nie bierze udziału w żadnym etapie uczenia ani doboru parametrów. Służy wyłącznie do finalnej, obiektywnej ewaluacji najlepszego modelu.</li>
 </ul>
-<h4>MLflow</h4>
-<p>Każdy trening tworzy nowy experiment run z parametrami, metrykami i artefaktami modelu. Modele trafiają do <strong>Model Registry</strong>.</p>
-<h4>DVC</h4>
-<p>Wersjonowanie danych i modeli z zdalnym storage w <strong>Azure Blob Storage</strong>. Polecenia <code>dvc push/pull</code> synchronizują artefakty między środowiskami.</p>
-<h4>Artefakty</h4>
+
+<h4>Automatyczny Tuning i Hiperparametry</h4>
+<p>Strojenie modelu (Grid Search) odbywa się na siatce parametrów pobieranej z pliku <code>params.yaml</code>:</p>
 <ul>
-  <li><code>models/salary_model.pkl</code> — wytrenowany model</li>
-  <li><code>models/preprocessor.pkl</code> — pipeline sklearn</li>
-  <li><code>models/training_baseline.parquet</code> — dane bazowe dla driftu</li>
+  <li><code>n_estimators</code>: liczba drzew decyzyjnych (np. 100, 500, 1000).</li>
+  <li><code>max_depth</code>: maksymalna głębokość pojedynczego drzewa (np. 3, 6, 8) – kontroluje stopień skomplikowania relacji.</li>
+  <li><code>learning_rate</code>: krok uczenia (współczynnik kurczenia wag).</li>
+  <li><code>early_stopping_rounds</code>: mechanizm przerywania treningu, gdy błąd na zbiorze walidacyjnym przestaje spadać przez określoną liczbę rund.</li>
+</ul>
+
+<h4>Metryki Ewaluacyjne</h4>
+<ul>
+  <li><strong>RMSE (Root Mean Squared Error)</strong>: pierwiastek średniokwadratowego błędu. Silniej karze duże pomyłki modelu. Wyrażony w USD.</li>
+  <li><strong>MAE (Mean Absolute Error)</strong>: średnia bezwzględna różnica między pensją rzeczywistą a przewidywaną. Najbardziej intuicyjna interpretacja finansowa.</li>
+  <li><strong>MAPE (Mean Absolute Percentage Error)</strong>: średni procentowy błąd względny.</li>
+  <li><strong>R² (Współczynnik Determinacji)</strong>: wskazuje, jaki odsetek wariancji zarobków jest wyjaśniany przez model (wartość blisko 1.0 oznacza doskonałe dopasowanie).</li>
+</ul>
+
+<h4>Wersjonowanie Kodu i Danych (DVC & MLflow)</h4>
+<ul>
+  <li><strong>MLflow Tracking & Registry</strong>: Każdy trening rejestruje nowy eksperyment, loguje zestaw hiperparametrów, uzyskane metryki i zapisuje finalny model. Najlepsze modele są promowane do rejestru (Model Registry), skąd API automatycznie pobiera najnowszy model produkcyjny.</li>
+  <li><strong>DVC (Data Version Control)</strong>: Ponieważ zbiory danych Parquet i pliki modeli są zbyt duże dla repozytorium Git, są one wersjonowane za pomocą DVC. Metadane są śledzone w Git, a rzeczywiste pliki wysyłane do bezpiecznego repozytorium zdalnego (Azure Blob Storage). Synchronizacja odbywa się przez <code>dvc push</code> / <code>dvc pull</code>.</li>
 </ul>
 {% endblock %}
 

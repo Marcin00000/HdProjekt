@@ -36,7 +36,7 @@ async function loadDashboard() {
 
   let data = {};
   try {
-    const r = await fetch("/api/dashboard");
+    const r = await fetch("/api/dashboard?_=" + Date.now());
     data = await r.json();
   } catch (e) {
     if (sourceEl) sourceEl.textContent = "Blad pobierania danych: " + e.message;

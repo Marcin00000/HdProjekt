@@ -2,58 +2,50 @@
 {% block title %}Przygotowanie danych — ETL{% endblock %}
 
 {% block page_info %}
-<h4>Pipeline medalionowy</h4>
-<p>Dane przechodzą przez trzy warstwy, każda z wyższą jakością:</p>
-<ul>
-  <li><strong>Raw</strong> — oryginalny plik CSV (Kaggle), bez zmian</li>
-  <li><strong>Silver</strong> — oczyszczone: usunięte duplikaty, outliery salary, puste job_title/location; dodane cechy <code>salary_k</code>, <code>high_skills</code>, <code>is_remote</code></li>
-  <li><strong>Gold</strong> — agregaty analityczne gotowe na dashboard (<code>salary_by_location</code>, <code>salary_by_location_industry</code>)</li>
-  <li><strong>Azure SQL</strong> — schemat gwiazdy: <code>fact_salaries</code>, <code>dim_job</code>, <code>dim_company</code>, <code>dim_time</code></li>
-</ul>
+<h4>Szczegółowy opis potoku (Pipeline ETL)</h4>
+<p>Przetwarzanie danych opiera się na <strong>architekturze medalionowej</strong>, która krok po kroku zwiększa czystość, strukturę i wartość biznesową danych:</p>
 
-<h4>Kiedy użyć każdego kroku</h4>
-<ul>
-  <li><strong>Krok 1 — Przygotowanie lokalne</strong>: pierwsza instalacja lub nowy plik CSV. Zapisuje silver + gold na dysku. Nie wymaga Azure.</li>
-  <li><strong>+ Eksportuj do Azure Lake</strong>: opcja do kroku 1 — wgrywa parquet do ADLS Gen2. Wymaga skonfigurowanego Azure Storage.</li>
-  <li><strong>Krok 2 — Ładowanie hurtowni</strong>: po kroku 1, gdy skonfigurowane Azure SQL. Tworzy/nadpisuje tabele wymiarów i faktów.</li>
-  <li><strong>Krok 3 — Pipeline pełny (Prefect)</strong>: gdy wszystko skonfigurowane. Uruchamia kroki 1–2 przez orkiestrację Prefect (lub synchronicznie jako fallback).</li>
-  <li><strong>Krok 3 bez SQL</strong>: jak wyżej, ale pomija załadowanie hurtowni. Użyteczny w środowisku Docker bez sterownika ODBC.</li>
-</ul>
+<ol>
+  <li>
+    <strong>Warstwa Raw (Surowa / Bronze)</strong>:
+    <p>Oryginalny plik CSV (pobrany z Kaggle) jest odczytywany bez żadnych modyfikacji. Służy jako surowe źródło prawdy (Single Source of Truth).</p>
+  </li>
+  <li>
+    <strong>Warstwa Silver (Oczyszczona / Srebrna)</strong>:
+    <p>W tym kroku dane przechodzą rygorystyczny proces czyszczenia i walidacji jakościowej:</p>
+    <ul>
+      <li><strong>Filtrowanie duplikatów</strong>: Całkowicie usuwane są identyczne wiersze, aby zapobiec sztucznemu powielaniu tych samych ofert.</li>
+      <li><strong>Oczyszczanie braków (NaN)</strong>: Odrzucane są wiersze pozbawione kluczowych wartości (<code>job_title</code>, <code>salary</code>, <code>location</code>).</li>
+      <li><strong>Eliminacja anomalii i outlierów</strong>: Metodą przedziałów percentylowych (od 1% do 99%) usuwane są skrajne, nierealistyczne pensje, które mogłyby zaburzyć jakość modelu.</li>
+      <li><strong>Normalizacja tekstu</strong>: Standaryzowane są wartości tekstowe (np. ujednolicenie wielkości liter w nazwach miast, branż czy form pracy).</li>
+      <li><strong>Inżynieria Cech (Feature Engineering)</strong>:
+        <ul>
+          <li><code>salary_k</code>: pensja wyrażona w tysiącach USD.</li>
+          <li><code>is_remote</code>: binarna flaga (0/1) wyliczana z kolumny <code>remote_work</code> (true dla "Yes" i "Hybrid").</li>
+          <li><code>high_skills</code>: binarna flaga wskazująca wysokie wymagania (liczba umiejętności powyżej mediany).</li>
+        </ul>
+      </li>
+    </ul>
+    <p>Wynik jest zapisywany w formacie kolumnowym <strong>Parquet</strong> (<code>cleaned.parquet</code>).</p>
+  </li>
+  <li>
+    <strong>Warstwa Gold (Agregaty / Złota)</strong>:
+    <p>Z danych Silver wyliczane są zagregowane statystyki (średnie, mediany i liczności) w przekrojach geograficznych, branżowych oraz stanowiskowych, gotowe bezpośrednio pod dashboard.</p>
+  </li>
+  <li>
+    <strong>Warstwa DWH (Hurtownia Danych / Azure SQL)</strong>:
+    <p>Dane z płaskiej struktury pliku są mapowane na wydajny <strong>schemat gwiazdy (Star Schema)</strong> w Azure SQL:</p>
+    <ul>
+      <li><code>fact_salaries</code> (fakt) — salary, klucze wymiarów.</li>
+      <li><code>dim_job</code> — stanowisko, wykształcenie, umiejętności, certyfikaty.</li>
+      <li><code>dim_company</code> — branża, wielkość firmy, praca zdalna.</li>
+      <li><code>dim_time</code> — data ETL (jeden wiersz per uruchomienie).</li>
+    </ul>
+  </li>
+</ol>
 
-<h4>Wymagania — CSV</h4>
-<p>Plik musi zawierać kolumny:</p>
-<ul>
-  <li><code>job_title</code>, <code>experience_years</code>, <code>education_level</code>, <code>skills_count</code></li>
-  <li><code>industry</code>, <code>company_size</code>, <code>location</code>, <code>remote_work</code></li>
-  <li><code>certifications</code>, <code>salary</code></li>
-</ul>
-
-<h4>Wymagania — Azure</h4>
-<ul>
-  <li><strong>Storage (Lake)</strong>: <code>AZURE_STORAGE_ACCOUNT</code> + <code>AZURE_STORAGE_KEY</code> lub <code>AZURE_STORAGE_SAS_TOKEN</code></li>
-  <li><strong>SQL (DWH)</strong>: <code>AZURE_SQL_SERVER</code>, <code>AZURE_SQL_DATABASE</code>, <code>AZURE_SQL_USERNAME</code>, <code>AZURE_SQL_PASSWORD</code></li>
-</ul>
-
-<h4>Pliki wyjściowe</h4>
-<ul>
-  <li><code>data/processed/cleaned.parquet</code> — warstwa silver</li>
-  <li><code>data/processed/salary_by_location.parquet</code> — gold agregat 1</li>
-  <li><code>data/processed/salary_by_location_industry.parquet</code> — gold agregat 2</li>
-  <li><code>data/processed/prepare_summary.json</code> — podsumowanie kroku 1</li>
-  <li><code>data/processed/etl_summary.json</code> — podsumowanie pełnego ETL</li>
-  <li><code>data/processed/dwh_summary.json</code> — podsumowanie ładowania SQL</li>
-</ul>
-
-<h4>Schemat gwiazdy (Azure SQL)</h4>
-<ul>
-  <li><code>fact_salaries</code> — fakty: salary, klucze wymiarów</li>
-  <li><code>dim_job</code> — stanowisko, wykształcenie, umiejętności, certyfikaty</li>
-  <li><code>dim_company</code> — branża, wielkość firmy, praca zdalna</li>
-  <li><code>dim_time</code> — data ETL (jeden wiersz per uruchomienie)</li>
-</ul>
-
-<h4>Historia uruchomień</h4>
-<p>Każde uruchomienie przez Prefect jest rejestrowane w <a href="/prefect" target="_blank" class="app-link">Prefect UI ↗</a> — widoczne przepływy, logi i czasy wykonania.</p>
+<h4>Orkiestracja i Automatyzacja (Prefect)</h4>
+<p>Całość procesu ETL jest orkiestrowana przy użyciu narzędzia <strong>Prefect</strong>. System definiuje przepływ (Flow) składający się z powiązanych zadań (Tasks), zbiera logi, raportuje błędy i umożliwia uruchamianie harmonogramów czasowych (np. cotygodniowa synchronizacja danych).</p>
 {% endblock %}
 
 {% block content %}

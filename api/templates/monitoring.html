@@ -2,21 +2,32 @@
 {% block title %}Monitoring driftu{% endblock %}
 
 {% block page_info %}
-<h4>Czym jest drift danych?</h4>
-<p>Drift oznacza, że rozkład nowych danych <strong>znacząco różni się</strong> od danych, na których uczono model — co może obniżyć jakość prognoz.</p>
-<h4>Jak to działa?</h4>
+<h4>Monitoring Dryfu Danych (Data Drift)</h4>
+<p>System monitoruje stabilność otoczenia produkcyjnego modelu poprzez wykrywanie dryfu (Data Drift) i dryfu celu (Target Drift). Zjawisko to zachodzi, gdy profil danych wejściowych z rynku (np. nagły wzrost liczby ofert w pełni zdalnych lub spadek ofert dla juniorów) zaczyna odbiegać od rozkładu cech, na których nauczono model, co bezpośrednio przekłada się na spadek dokładności prognoz.</p>
+
+<h4>Metodologia Detekcji (Evidently AI)</h4>
+<p>Porównanie opiera się na dwóch zbiorach danych:</p>
 <ul>
-  <li>Baseline to <code>training_baseline.parquet</code> — zapisany podczas ostatniego treningu</li>
-  <li>Bieżący silver (<code>cleaned.parquet</code>) jest porównywany z baseline przez <strong>Evidently</strong></li>
-  <li>Raport Evidently analizuje rozkłady kolumn testem statystycznym</li>
-  <li>Jeśli odsetek dryfujących kolumn przekroczy <strong>próg</strong>, system inicjuje auto-retrain przez Prefect</li>
+  <li><strong>Zbiór Odniesienia (Baseline)</strong>: snapshot danych treningowych (<code>training_baseline.parquet</code>) wygenerowany podczas ostatniego stabilnego procesu uczenia.</li>
+  <li><strong>Zbiór Bieżący (Current)</strong>: najnowsze dane rynkowe z warstwy Silver (<code>cleaned.parquet</code>).</li>
 </ul>
-<h4>Pasek driftu</h4>
-<p>Wskazówka na niebiesko to aktualny poziom driftu. Jeśli przekracza <strong>czerwoną linię progu</strong>, wyzwalany jest retrain.</p>
-<h4>Tryb demo</h4>
-<p>Brak pliku silver? Można uruchomić <strong>symulację driftu</strong> — system generuje sztucznie zmienione dane, aby przetestować mechanizm monitoringu.</p>
-<h4>Historia raportów</h4>
-<p>Każdy run zapisuje raport HTML Evidently w <code>monitoring/reports/</code>. Można go pobrać z listy historii.</p>
+<p>Narzędzie <strong>Evidently</strong> automatycznie dobiera testy statystyczne do charakteru zmiennych:</p>
+<ul>
+  <li>Dla cech numerycznych/ciągłych (np. lata doświadczenia, płaca): stosowany jest <strong>dwupróbowy test Kołmogorowa-Smirnowa (KS)</strong>.</li>
+  <li>Dla cech kategorycznych (np. lokalizacja, wykształcenie, branża): stosowany jest <strong>test Chi-kwadrat ($\chi^2$)</strong>.</li>
+</ul>
+
+<h4>Próg Dryfu i Automatyczne Douczanie (Auto-Retrain)</h4>
+<p>Każda cecha jest indywidualnie analizowana pod kątem istotności statystycznej przesunięcia (standardowo poziom istotności $\alpha = 0.05$). Jeśli prawdopodobieństwo $p$-value spadnie poniżej tej wartości, cecha uznawana jest za "zdryfowaną".</p>
+<p>Wskaźnik <strong>Drift Share (Udział Dryfu)</strong> to odsetek zdryfowanych cech w stosunku do wszystkich monitorowanych zmiennych. Jeśli przekroczy on zdefiniowany próg (np. <strong>30%</strong> – oznaczony czerwoną linią), orkiestrator Prefect automatycznie wyzwala job <strong>auto-retrain</strong>. Obejmuje to zaciągnięcie świeżych danych, uruchomienie ETL, ponowny trening modelu na nowym rozkładzie oraz podłożenie nowego baseline.</p>
+
+<h4>Tryb Demonstracyjny (Symulacja Driftu)</h4>
+<p>Umożliwia przetestowanie mechanizmów pętli zwrotnej MLOps bez oczekiwania na rzeczywiste zmiany rynkowe. Dostępne są scenariusze:</p>
+<ul>
+  <li><code>location_shift</code>: Sztuczne przesunięcie geograficzne ofert.</li>
+  <li><code>salary_inflation</code>: Symulacja nagłej inflacji i wzrostu płac (dryf celu).</li>
+  <li><code>tech_boom</code>: Gwałtowny wzrost ofert w branży technologicznej i zmiana struktury firm.</li>
+</ul>
 {% endblock %}
 
 {% block content %}

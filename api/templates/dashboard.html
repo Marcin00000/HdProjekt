@@ -2,22 +2,27 @@
 {% block title %}Dashboard — Job Salary Portal{% endblock %}
 
 {% block page_info %}
-<h4>Co pokazuje dashboard</h4>
-<p>Wykresy oparte na warstwie <strong>silver</strong> — oczyszczonych danych (kwantyle 1–99% wynagrodzenia, bez duplikatów). Opcjonalnie uzupełniane licznikami z <strong>Azure SQL</strong>.</p>
-<h4>Sekcje</h4>
+<h4>Dashboard Analityczny (Opis i Metodyka)</h4>
+<p>Interaktywny panel służy do wizualizacji struktury zarobków na rynku pracy. Dane są agregowane w czasie rzeczywistym i prezentowane w podziale na kluczowe wymiary geograficzne, branżowe oraz kompetencyjne.</p>
+
+<h4>Źródła Danych (Hybrydowe Ładowanie)</h4>
+<p>Backend API dynamicznie dobiera optymalne źródło danych w zależności od stanu wdrożenia systemu:</p>
 <ul>
-  <li><strong>Rynek pracy</strong> — średnie pensje wg lokalizacji (top 10) oraz rozkład wynagrodzeń</li>
-  <li><strong>Cechy pracownika</strong> — wykształcenie, lata doświadczenia, top stanowiska</li>
-  <li><strong>Struktura firm</strong> — branża, wielkość firmy, forma pracy zdalnej</li>
-</ul>
-<h4>Karty KPI</h4>
+  <li><strong>Warstwa Silver (Parquet)</strong>: Podstawowe źródło wykresów. Dane są wolne od outlierów i duplikatów (kwantyle 1-99% zarobków).</li>
+  <li><strong>Hurtownia Danych (Azure SQL)</strong>: Karta KPI liczby rekordów oraz źródła danych komunikuje się bezpośrednio z chmurą Azure SQL Database, pobierając metryki z tabeli faktów <code>fact_salaries</code>.</li>
+  <li><strong>Fallback</strong>: W przypadku braku przetworzonych plików, system automatycznie serwuje dane bezpośrednio ze statycznych plików Gold lub surowego pliku CSV (Raw).</li>
+ </ul>
+
+<h4>Sekcje i Wskaźniki</h4>
 <ul>
-  <li><strong>Rekordów</strong> — liczba ofert w warstwie silver</li>
-  <li><strong>Średnia / Mediana pensji</strong> — obliczone na całym zbiorze</li>
-  <li><strong>Źródło</strong> — skąd pobrano dane (silver, SQL, gold lub raw CSV)</li>
-</ul>
-<h4>Odświeżanie</h4>
-<p>Dane odświeżają się przy każdym wejściu na stronę. Przycisk <strong>Odśwież</strong> pobiera najnowsze dane bez przeładowania strony.</p>
+  <li><strong>Karty KPI</strong>: Prezentują liczbę analizowanych ofert pracy, średnią i medianę wynagrodzeń w ujęciu rocznym (brutto USD) oraz aktywne źródło danych.</li>
+  <li><strong>Rynek pracy</strong>: Średnia płaca dla 10 najpopularniejszych lokalizacji oraz histogram rozkładu wynagrodzeń na całym rynku.</li>
+  <li><strong>Profil pracownika</strong>: Pensja w podziale na wykształcenie, przedziały doświadczenia (0-2, 3-5, 6-10, 11-15, 16+ lat) oraz top 10 najlepiej opłacanych stanowisk.</li>
+  <li><strong>Struktura firm</strong>: Zależność płac od branży, wielkości organizacji (S/M/L) oraz formy świadczenia usług (stacjonarnie vs zdalnie).</li>
+ </ul>
+
+<h4>Odświeżanie i Stabilność Układu</h4>
+<p>Przycisk <strong>"Odśwież"</strong> wysyła asynchroniczne żądanie <code>GET /api/dashboard</code> z parametrem cache-busting (timestamp), co omija pamięć podręczną przeglądarki i pobiera najświeższe dane z dysku/bazy SQL. Wykresy automatycznie skalują się do wymiarów kart dzięki technologii flexbox i wrapperom Chart.js.</p>
 {% endblock %}
 
 {% block head %}

@@ -2,28 +2,28 @@
 {% block title %}Prognoza pensji{% endblock %}
 
 {% block page_info %}
-<h4>Jak działa prognoza?</h4>
-<p>Model <strong>XGBoost</strong> wytrenowany na danych z Kaggle przewiduje roczne wynagrodzenie brutto w USD na podstawie 9 cech oferty pracy.</p>
-<h4>Cechy wejściowe</h4>
+<h4>Wnioskowanie w Czasie Rzeczywistym (Real-time Inference)</h4>
+<p>Formularz prognozowania wykorzystuje produkcyjny model <strong>XGBoost</strong> do natychmiastowego oszacowania rocznej pensji brutto (w USD). Po kliknięciu przycisku "Przewiduj", parametry wejściowe są przekazywane do FastAPI, które ładuje preprocesor oraz model bezpośrednio z pamięci RAM serwera.</p>
+
+<h4>Preprocesor i Transformacja Danych</h4>
+<p>Wprowadzone wartości nie mogą trafić bezpośrednio do algorytmu XGBoost. Przechodzą one przez identyczny proces transformacji (Pipeline scikit-learn), jaki zastosowano podczas treningu:</p>
 <ul>
-  <li><strong>Stanowisko</strong> — tytuł zawodowy (np. Data Scientist, ML Engineer)</li>
-  <li><strong>Lata doświadczenia</strong> — całkowity staż zawodowy</li>
-  <li><strong>Wykształcenie</strong> — najwyższy osiągnięty poziom edukacji</li>
-  <li><strong>Branża</strong> — sektor firmy (Technology, Finance…)</li>
-  <li><strong>Wielkość firmy</strong> — Small / Medium / Large</li>
-  <li><strong>Lokalizacja</strong> — kraj / region</li>
-  <li><strong>Praca zdalna</strong> — Yes / No / Hybrid</li>
-  <li><strong>Liczba umiejętności</strong> — wartość liczbowa z CV</li>
-  <li><strong>Certyfikaty</strong> — liczba zdobytych certyfikatów branżowych</li>
+  <li><strong>One-Hot Encoding</strong>: Kolumny kategoryczne (stanowisko, wykształcenie, branża, rozmiar firmy, praca zdalna, lokalizacja) są zamieniane na wektory binarne (0/1).</li>
+  <li><strong>Skalowanie i Inżynieria Cech</strong>: Zmienne numeryczne są odpowiednio sprawdzane, a flaga pracy zdalnej jest mapowana na binarny wskaźnik <code>is_remote</code>.</li>
 </ul>
-<h4>REST API</h4>
-<p>Prognozę można też pobrać programatycznie:</p>
+
+<h4>Walidacja Pydantic i REST API</h4>
+<p>Każde zapytanie podlega automatycznej walidacji za pomocą klasy Pydantic <code>SalaryPredictRequest</code>, co chroni serwer przed błędnymi typami danych (np. tekst w polu lat doświadczenia). Prognozy można pobierać programistycznie za pomocą REST API:</p>
 <ul>
-  <li><code>POST /predict</code> z body JSON</li>
-  <li>Dokumentacja: <a href="/docs" target="_blank" class="app-link">Swagger UI ↗</a></li>
+  <li><code>POST /predict</code> — z JSON body (zwraca wyliczoną kwotę).</li>
+  <li>Dokumentacja Swagger: <a href="/docs" target="_blank" class="app-link">Swagger UI ↗</a>.</li>
 </ul>
-<h4>Ograniczenia</h4>
-<p>Model interpoluje w zakresie danych treningowych. Skrajne kombinacje (np. 0 lat + CEO) mogą dawać zawyżone lub zaniżone wyniki.</p>
+
+<h4>Ograniczenia i Ostrzeżenia (Warnings)</h4>
+<ul>
+  <li><strong>Zasada interpolacji</strong>: Model uczy się na historycznych wzorcach. Podanie skrajnych wartości (np. 40 lat doświadczenia przy stanowisku juniorskim) może skutkować nietypowymi wynikami.</li>
+  <li><strong>Detekcja nietypowych danych (Out of Distribution)</strong>: Jeśli podane parametry rzadko występowały w zbiorze treningowym, system wyświetli ostrzeżenie informujące o potencjalnie wyższym błędzie prognozy.</li>
+</ul>
 {% endblock %}
 
 {% block content %}
