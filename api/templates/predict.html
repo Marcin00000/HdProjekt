@@ -1,90 +1,215 @@
 {% extends "base.html" %}
 {% block title %}Prognoza pensji{% endblock %}
-{% block content %}
-<h1>Prognoza pensji</h1>
-<div class="predict-layout">
-  <form method="post" action="/predict/form" class="predict-form" id="predict-form">
-    <label>Stanowisko
-      <select name="job_title" required>
-        {% for v in options.job_title %}
-        <option value="{{ v }}"{% if inputs is defined and inputs and inputs.job_title == v %} selected{% elif not (inputs is defined and inputs) and v == 'Data Scientist' %} selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Lata doswiadczenia
-      <input name="experience_years" type="number" min="0" max="40" value="{{ inputs.experience_years if inputs is defined and inputs else 5 }}" required>
-    </label>
-    <label>Wyksztalcenie
-      <select name="education_level" required>
-        {% for v in options.education_level %}
-        <option{% if inputs is defined and inputs and inputs.education_level == v %} selected{% elif not (inputs is defined and inputs) and v == 'Master' %} selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Liczba umiejetnosci
-      <input name="skills_count" type="number" min="0" value="{{ inputs.skills_count if inputs is defined and inputs else 10 }}" required>
-    </label>
-    <label>Branza
-      <select name="industry" required>
-        {% for v in options.industry %}
-        <option{% if inputs is defined and inputs and inputs.industry == v %} selected{% elif not (inputs is defined and inputs) and v == 'Technology' %} selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Wielkosc firmy
-      <select name="company_size" required>
-        {% for v in options.company_size %}
-        <option{% if inputs is defined and inputs and inputs.company_size == v %} selected{% elif not (inputs is defined and inputs) and v == 'Medium' %} selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Lokalizacja
-      <select name="location" required>
-        {% for v in options.location %}
-        <option{% if inputs is defined and inputs and inputs.location == v %} selected{% elif not (inputs is defined and inputs) and v == 'USA' %} selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Praca zdalna
-      <select name="remote_work" required>
-        {% for v in options.remote_work %}
-        <option{% if inputs is defined and inputs and inputs.remote_work == v %} selected{% elif not (inputs is defined and inputs) and v == 'Yes' %} selected{% endif %}>{{ v }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Certyfikaty
-      <input name="certifications" type="number" min="0" value="{{ inputs.certifications if inputs is defined and inputs else 2 }}" required>
-    </label>
-    <button type="submit">Oblicz prognoze</button>
-  </form>
 
-  <aside class="predict-result-panel">
-    <h2>Wynik</h2>
-    {% if error %}
-    <p class="predict-result-error">{{ error }}</p>
-    {% elif result is not none %}
-    <p class="predict-salary">${{ "{:,.0f}".format(result) }}</p>
-    <p class="muted predict-salary-label">Prognozowana pensja roczna (USD)</p>
-    {% if warning %}
-    <p class="predict-result-warn">{{ warning }}</p>
-    {% endif %}
-    {% if inputs is defined and inputs %}
-    <dl class="predict-summary">
-      <dt>Stanowisko</dt><dd>{{ inputs.job_title }}</dd>
-      <dt>Doswiadczenie</dt><dd>{{ inputs.experience_years }} lat</dd>
-      <dt>Wyksztalcenie</dt><dd>{{ inputs.education_level }}</dd>
-      <dt>Umiejetnosci</dt><dd>{{ inputs.skills_count }}</dd>
-      <dt>Branza</dt><dd>{{ inputs.industry }}</dd>
-      <dt>Firma</dt><dd>{{ inputs.company_size }}</dd>
-      <dt>Lokalizacja</dt><dd>{{ inputs.location }}</dd>
-      <dt>Zdalnie</dt><dd>{{ inputs.remote_work }}</dd>
-      <dt>Certyfikaty</dt><dd>{{ inputs.certifications }}</dd>
-    </dl>
-    {% endif %}
-    {% else %}
-    <p class="muted">Uzupelnij formularz i kliknij <strong>Oblicz prognoze</strong>, aby zobaczyc przewidywana pensje.</p>
-    {% endif %}
-  </aside>
+{% block page_info %}
+<h4>Wnioskowanie w Czasie Rzeczywistym (Real-time Inference)</h4>
+<p>Formularz prognozowania wykorzystuje produkcyjny model <strong>XGBoost</strong> do natychmiastowego oszacowania rocznej pensji brutto (w USD). Po kliknięciu przycisku "Przewiduj", parametry wejściowe są przekazywane do FastAPI, które ładuje preprocesor oraz model bezpośrednio z pamięci RAM serwera.</p>
+
+<h4>Preprocesor i Transformacja Danych</h4>
+<p>Wprowadzone wartości nie mogą trafić bezpośrednio do algorytmu XGBoost. Przechodzą one przez identyczny proces transformacji (Pipeline scikit-learn), jaki zastosowano podczas treningu:</p>
+<ul>
+  <li><strong>One-Hot Encoding</strong>: Kolumny kategoryczne (stanowisko, wykształcenie, branża, rozmiar firmy, praca zdalna, lokalizacja) są zamieniane na wektory binarne (0/1).</li>
+  <li><strong>Skalowanie i Inżynieria Cech</strong>: Zmienne numeryczne są odpowiednio sprawdzane, a flaga pracy zdalnej jest mapowana na binarny wskaźnik <code>is_remote</code>.</li>
+</ul>
+
+<h4>Walidacja Pydantic i REST API</h4>
+<p>Każde zapytanie podlega automatycznej walidacji za pomocą klasy Pydantic <code>SalaryPredictRequest</code>, co chroni serwer przed błędnymi typami danych (np. tekst w polu lat doświadczenia). Prognozy można pobierać programistycznie za pomocą REST API:</p>
+<ul>
+  <li><code>POST /predict</code> — z JSON body (zwraca wyliczoną kwotę).</li>
+  <li>Dokumentacja Swagger: <a href="/docs" target="_blank" class="app-link">Swagger UI ↗</a>.</li>
+</ul>
+
+<h4>Ograniczenia i Ostrzeżenia (Warnings)</h4>
+<ul>
+  <li><strong>Zasada interpolacji</strong>: Model uczy się na historycznych wzorcach. Podanie skrajnych wartości (np. 40 lat doświadczenia przy stanowisku juniorskim) może skutkować nietypowymi wynikami.</li>
+  <li><strong>Detekcja nietypowych danych (Out of Distribution)</strong>: Jeśli podane parametry rzadko występowały w zbiorze treningowym, system wyświetli ostrzeżenie informujące o potencjalnie wyższym błędzie prognozy.</li>
+</ul>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Prognoza pensji</h1>
+    <p class="muted" style="margin-top:0.25rem">Model XGBoost — kategorii z danych treningowych ({{ options.source }})</p>
+  </div>
 </div>
-<p class="muted">Kategorie z danych treningowych ({{ options.source }}). REST: <code>POST /predict</code></p>
+
+<div class="predict-layout">
+
+  <!-- ── Formularz ── -->
+  <div class="predict-form-card">
+    <form method="post" action="/predict/form" class="predict-form" id="predict-form">
+
+      <fieldset class="predict-fieldset">
+        <legend class="predict-legend">Stanowisko i doświadczenie</legend>
+        <div class="predict-fields-grid">
+          <label class="predict-label">
+            <span class="predict-label-text">Stanowisko</span>
+            <select name="job_title" required class="predict-control">
+              {% for v in options.job_title %}
+              <option value="{{ v }}"{% if inputs is defined and inputs and inputs.job_title == v %} selected{% elif not (inputs is defined and inputs) and v == 'Data Scientist' %} selected{% endif %}>{{ v }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label class="predict-label">
+            <span class="predict-label-text">Wykształcenie</span>
+            <select name="education_level" required class="predict-control">
+              {% for v in options.education_level %}
+              <option{% if inputs is defined and inputs and inputs.education_level == v %} selected{% elif not (inputs is defined and inputs) and v == 'Master' %} selected{% endif %}>{{ v }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label class="predict-label">
+            <span class="predict-label-text">Lata doświadczenia</span>
+            <input name="experience_years" type="number" min="0" max="40"
+              value="{{ inputs.experience_years if inputs is defined and inputs else 5 }}"
+              required class="predict-control">
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="predict-fieldset">
+        <legend class="predict-legend">Firma i lokalizacja</legend>
+        <div class="predict-fields-grid">
+          <label class="predict-label">
+            <span class="predict-label-text">Branża</span>
+            <select name="industry" required class="predict-control">
+              {% for v in options.industry %}
+              <option{% if inputs is defined and inputs and inputs.industry == v %} selected{% elif not (inputs is defined and inputs) and v == 'Technology' %} selected{% endif %}>{{ v }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label class="predict-label">
+            <span class="predict-label-text">Wielkość firmy</span>
+            <select name="company_size" required class="predict-control">
+              {% for v in options.company_size %}
+              <option{% if inputs is defined and inputs and inputs.company_size == v %} selected{% elif not (inputs is defined and inputs) and v == 'Medium' %} selected{% endif %}>{{ v }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label class="predict-label">
+            <span class="predict-label-text">Lokalizacja</span>
+            <select name="location" required class="predict-control">
+              {% for v in options.location %}
+              <option{% if inputs is defined and inputs and inputs.location == v %} selected{% elif not (inputs is defined and inputs) and v == 'USA' %} selected{% endif %}>{{ v }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label class="predict-label">
+            <span class="predict-label-text">Praca zdalna</span>
+            <select name="remote_work" required class="predict-control">
+              {% for v in options.remote_work %}
+              <option{% if inputs is defined and inputs and inputs.remote_work == v %} selected{% elif not (inputs is defined and inputs) and v == 'Yes' %} selected{% endif %}>{{ v }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="predict-fieldset">
+        <legend class="predict-legend">Umiejętności</legend>
+        <div class="predict-fields-grid">
+          <label class="predict-label">
+            <span class="predict-label-text">Liczba umiejętności</span>
+            <input name="skills_count" type="number" min="0"
+              value="{{ inputs.skills_count if inputs is defined and inputs else 10 }}"
+              required class="predict-control">
+          </label>
+
+          <label class="predict-label">
+            <span class="predict-label-text">Certyfikaty</span>
+            <input name="certifications" type="number" min="0"
+              value="{{ inputs.certifications if inputs is defined and inputs else 2 }}"
+              required class="predict-control">
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="predict-submit-row">
+        <button type="submit" class="btn-primary predict-submit">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="margin-right:0.4rem">
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Oblicz prognozę
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+  <!-- ── Panel wyników ── -->
+  <aside class="predict-result-card">
+    <div class="predict-result-inner">
+      {% if error %}
+        <div class="predict-result-state predict-result-state--error">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <circle cx="16" cy="16" r="14" stroke="#f87171" stroke-width="2"/>
+            <path d="M16 10v7M16 21v1" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+          <p class="predict-result-error">{{ error }}</p>
+        </div>
+
+      {% elif result is not none %}
+        <div class="predict-result-state predict-result-state--ok">
+          <p class="predict-result-label">Prognozowana pensja roczna (USD)</p>
+          <p class="predict-salary">${{ "{:,.0f}".format(result) }}</p>
+          {% if warning %}
+          <p class="predict-result-warn">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style="vertical-align:-2px;margin-right:4px">
+              <path d="M7 1L13 12H1L7 1Z" stroke="#f59e0b" stroke-width="1.4"/>
+              <path d="M7 6v3" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="7" cy="10.5" r="0.6" fill="#f59e0b"/>
+            </svg>
+            {{ warning }}
+          </p>
+          {% endif %}
+        </div>
+
+        {% if inputs is defined and inputs %}
+        <div class="predict-summary-grid">
+          {% set items = [
+            ("Stanowisko", inputs.job_title),
+            ("Doświadczenie", inputs.experience_years ~ " lat"),
+            ("Wykształcenie", inputs.education_level),
+            ("Umiejętności", inputs.skills_count),
+            ("Branża", inputs.industry),
+            ("Firma", inputs.company_size),
+            ("Lokalizacja", inputs.location),
+            ("Zdalnie", inputs.remote_work),
+            ("Certyfikaty", inputs.certifications),
+          ] %}
+          {% for label, value in items %}
+          <div class="predict-summary-row">
+            <span class="predict-summary-key">{{ label }}</span>
+            <span class="predict-summary-val">{{ value }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+      {% else %}
+        <div class="predict-result-state predict-result-state--idle">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <circle cx="24" cy="24" r="20" stroke="#2a3548" stroke-width="2"/>
+            <path d="M16 24h16M24 16v16" stroke="#3d5166" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+          <p>Uzupełnij formularz i kliknij<br><strong>Oblicz prognozę</strong></p>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="predict-api-hint">
+      <span>REST API:</span>
+      <code>POST /predict</code>
+      &mdash;
+      <a href="/docs" target="_blank" rel="noopener" class="app-link">Swagger&nbsp;↗</a>
+    </div>
+  </aside>
+
+</div>
 {% endblock %}

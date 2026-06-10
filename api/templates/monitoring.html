@@ -1,35 +1,65 @@
 {% extends "base.html" %}
 {% block title %}Monitoring driftu{% endblock %}
+
+{% block page_info %}
+<h4>Monitoring Dryfu Danych (Data Drift)</h4>
+<p>System monitoruje stabilność otoczenia produkcyjnego modelu poprzez wykrywanie dryfu (Data Drift) i dryfu celu (Target Drift). Zjawisko to zachodzi, gdy profil danych wejściowych z rynku (np. nagły wzrost liczby ofert w pełni zdalnych lub spadek ofert dla juniorów) zaczyna odbiegać od rozkładu cech, na których nauczono model, co bezpośrednio przekłada się na spadek dokładności prognoz.</p>
+
+<h4>Metodologia Detekcji (Evidently AI)</h4>
+<p>Porównanie opiera się na dwóch zbiorach danych:</p>
+<ul>
+  <li><strong>Zbiór Odniesienia (Baseline)</strong>: snapshot danych treningowych (<code>training_baseline.parquet</code>) wygenerowany podczas ostatniego stabilnego procesu uczenia.</li>
+  <li><strong>Zbiór Bieżący (Current)</strong>: najnowsze dane rynkowe z warstwy Silver (<code>cleaned.parquet</code>).</li>
+</ul>
+<p>Narzędzie <strong>Evidently</strong> automatycznie dobiera testy statystyczne do charakteru zmiennych:</p>
+<ul>
+  <li>Dla cech numerycznych/ciągłych (np. lata doświadczenia, płaca): stosowany jest <strong>dwupróbowy test Kołmogorowa-Smirnowa (KS)</strong>.</li>
+  <li>Dla cech kategorycznych (np. lokalizacja, wykształcenie, branża): stosowany jest <strong>test Chi-kwadrat ($\chi^2$)</strong>.</li>
+</ul>
+
+<h4>Próg Dryfu i Automatyczne Douczanie (Auto-Retrain)</h4>
+<p>Każda cecha jest indywidualnie analizowana pod kątem istotności statystycznej przesunięcia (standardowo poziom istotności $\alpha = 0.05$). Jeśli prawdopodobieństwo $p$-value spadnie poniżej tej wartości, cecha uznawana jest za "zdryfowaną".</p>
+<p>Wskaźnik <strong>Drift Share (Udział Dryfu)</strong> to odsetek zdryfowanych cech w stosunku do wszystkich monitorowanych zmiennych. Jeśli przekroczy on zdefiniowany próg (np. <strong>30%</strong> – oznaczony czerwoną linią), orkiestrator Prefect automatycznie wyzwala job <strong>auto-retrain</strong>. Obejmuje to zaciągnięcie świeżych danych, uruchomienie ETL, ponowny trening modelu na nowym rozkładzie oraz podłożenie nowego baseline.</p>
+
+<h4>Tryb Demonstracyjny (Symulacja Driftu)</h4>
+<p>Umożliwia przetestowanie mechanizmów pętli zwrotnej MLOps bez oczekiwania na rzeczywiste zmiany rynkowe. Dostępne są scenariusze:</p>
+<ul>
+  <li><code>location_shift</code>: Sztuczne przesunięcie geograficzne ofert.</li>
+  <li><code>salary_inflation</code>: Symulacja nagłej inflacji i wzrostu płac (dryf celu).</li>
+  <li><code>tech_boom</code>: Gwałtowny wzrost ofert w branży technologicznej i zmiana struktury firm.</li>
+</ul>
+{% endblock %}
+
 {% block content %}
-<h1>Monitoring driftu rynku</h1>
+<h1>Monitoring driftu</h1>
 <p class="muted">
-  Porownanie <strong>training_baseline</strong> (dane treningowe modelu) z <strong>cleaned.parquet</strong> (rynek po ETL).
-  Przy driftcie mozesz uruchomic <strong>retrening</strong> — nowy model i baseline.
+  Porownanie danych treningowych (<strong>training_baseline</strong>) z aktualnym rynkiem (<strong>cleaned.parquet</strong>).
+  Przy wykryciu driftu mozna uruchomic automatyczny retrening.
 </p>
 
+{# ── STATUS DRIFTU ── #}
 <section class="status-grid">
   <div class="status-item">
     Baseline treningu:
-    {% if baseline_ok %}<span class="ok">zapisany</span>{% else %}<span class="warn">brak — uruchom trening</span>{% endif %}
+    {% if baseline_ok %}<span class="ok">&#10003; zapisany</span>{% else %}<span class="warn">&#9888; brak — uruchom trening</span>{% endif %}
   </div>
   <div class="status-item" data-path-key="silver">
-    Silver (aktualny rynek):
-    <span class="path-ok ok"{% if not paths.silver %} style="display:none"{% endif %}>dostepny</span>
-    <span class="path-warn warn"{% if paths.silver %} style="display:none"{% endif %}>brak — uruchom ETL</span>
+    Aktualny silver:
+    <span class="path-ok ok"{% if not paths.silver %} style="display:none"{% endif %}>&#10003; dostepny</span>
+    <span class="path-warn warn"{% if paths.silver %} style="display:none"{% endif %}>&#9888; brak — uruchom ETL</span>
   </div>
   {% if simulation_active %}
   <div class="status-item">
     Tryb demo: <span class="warn">symulowany silver</span> ({{ simulation_meta.scenario }})
   </div>
   {% endif %}
-  <div class="status-item">
-    Auto-retrain (Prefect cron): {% if monitoring_cfg.auto_retrain_enabled %}<span class="ok">wlaczony</span>{% else %}<span class="muted">wylaczony</span>{% endif %}
-    &middot; tryb: <code>{{ monitoring_cfg.retrain_mode }}</code>
-  </div>
 </section>
 
-{% if drift_metrics %}
-<section class="info-box drift-status-{{ drift_metrics.status or 'unknown' }}">
+{% if drift_metrics and drift_metrics.share_drifted_columns is defined %}
+{% set pct = (drift_metrics.share_drifted_columns * 100)|round(1) %}
+{% set threshold_pct = (monitoring_cfg.drift_threshold * 100)|round(0)|int %}
+{% set gauge_class = "drift-ok" if pct < 30 else ("drift-warn" if pct < threshold_pct else "drift-alert") %}
+<section class="info-box drift-status-{{ drift_metrics.status or 'unknown' }}" style="margin-top:1.25rem">
   <h2>Status driftu</h2>
   <p>
     {% if drift_metrics.drift_alert %}
@@ -40,29 +70,62 @@
     <span class="ok">OK</span> — {{ drift_metrics.message or 'Brak ostatniego raportu.' }}
     {% endif %}
   </p>
-  {% if drift_metrics.share_drifted_columns is defined %}
+
+  <div class="drift-gauge-wrap">
+    <div class="drift-gauge-label">
+      <span>Drift kolumn: <strong>{{ pct }}%</strong></span>
+      <span>prog: {{ threshold_pct }}%</span>
+    </div>
+    <div class="drift-gauge-track">
+      <div class="drift-gauge-fill {{ gauge_class }}" style="width:{{ [pct, 100]|min }}%"></div>
+      <div class="drift-gauge-threshold" style="left:{{ threshold_pct }}%"></div>
+    </div>
+    <p class="drift-gauge-pct {% if drift_metrics.drift_alert %}warn{% elif pct < 30 %}ok{% endif %}">
+      {{ pct }}%
+      {% if drift_metrics.salary_drift_detected %}<span class="warn" style="font-size:0.9rem;font-weight:400"> · Wykryto drift pensji (salary)</span>{% endif %}
+    </p>
+  </div>
+
   <ul class="metrics-list">
     <li>Referencja: {{ drift_metrics.reference_label or 'training_baseline' }} ({{ drift_metrics.reference_rows }} wierszy)</li>
     <li>Biezace: {{ drift_metrics.current_source or 'silver' }} ({{ drift_metrics.current_rows }} wierszy)</li>
-    <li>Drift kolumn: <strong>{{ (drift_metrics.share_drifted_columns * 100)|round(1) }}%</strong> (prog {{ (monitoring_cfg.drift_threshold * 100)|round(0) }}%)</li>
-    {% if drift_metrics.salary_drift_detected %}<li><span class="warn">Drift pensji (salary)</span></li>{% endif %}
   </ul>
-  {% endif %}
   {% if drift_metrics.report_url %}
-  <p><a class="btn-secondary" href="{{ drift_metrics.report_url }}" target="_blank" rel="noopener">Raport Evidently</a></p>
+  <p><a class="btn-secondary" href="{{ drift_metrics.report_url }}" target="_blank" rel="noopener">Raport Evidently HTML</a></p>
   {% endif %}
 </section>
-{% endif %}
 
-{% if last_retrain %}
-<section class="info-box">
-  <h2>Ostatni retrening po drift</h2>
-  <p>{{ last_retrain.message or last_retrain.skipped_reason }}</p>
-  {% if last_retrain.finished_at %}<p class="muted">{{ last_retrain.finished_at }}</p>{% endif %}
+{% elif drift_metrics %}
+<section class="info-box" style="margin-top:1.25rem">
+  <h2>Status driftu</h2>
+  <p class="muted">{{ drift_metrics.message or 'Brak danych — uruchom raport driftu.' }}</p>
+</section>
+{% else %}
+<section class="info-box" style="margin-top:1.25rem">
+  <h2>Status driftu</h2>
+  <p class="muted">Brak danych — uruchom raport driftu ponizej.</p>
 </section>
 {% endif %}
 
-<section class="ops-panel">
+{# ── AUTO-RETRAIN ── #}
+<section class="info-box" style="margin-top:1rem">
+  <h2>Automatyczny retrening</h2>
+  <p>
+    Harmonogram Prefect (<code>monitor_and_retrain</code>, niedziela 04:30):
+    {% if monitoring_cfg.auto_retrain_enabled %}
+    <span class="ok">&#10003; wlaczony</span>
+    {% else %}
+    <span class="muted">wylaczony</span>
+    {% endif %}
+    &middot; tryb: <code>{{ monitoring_cfg.retrain_mode }}</code>
+  </p>
+  {% if last_retrain %}
+  <p class="muted">Ostatni retrening: {{ last_retrain.message or last_retrain.skipped_reason }}{% if last_retrain.finished_at %} &middot; {{ last_retrain.finished_at }}{% endif %}</p>
+  {% endif %}
+</section>
+
+{# ── OPERACJE ── #}
+<section class="ops-panel" style="margin-top:1rem">
   <h2>Operacje</h2>
   <div class="progress-wrap">
     <div class="progress-bar" id="job-progress-bar" style="width:0%"></div>
@@ -70,34 +133,36 @@
   <div id="job-status" class="job-status muted">Gotowy</div>
   <pre id="job-log" class="job-log" data-placeholder="Raport driftu, symulacja rynku lub retrening.">Raport driftu, symulacja rynku lub retrening.</pre>
 
-  <label for="drift-scenario">Scenariusz symulacji (demo)</label>
+  <div class="btn-row" style="margin-top:1rem">
+    <button type="button" class="btn-secondary" data-job="drift_report" data-skip-reload>Wygeneruj raport driftu</button>
+    <button type="button" class="btn-primary" data-job="check_drift_retrain" data-skip-reload>Sprawdz drift i retrenuj</button>
+  </div>
+
+  <p class="muted" style="margin-top:1.25rem;margin-bottom:0.25rem;font-size:0.85rem;font-weight:600">Symulacja zmiany rynku (demo)</p>
+  <label for="drift-scenario">Scenariusz</label>
   <select id="drift-scenario" class="input-select">
     {% for s in scenarios %}
     <option value="{{ s }}">{{ s }}</option>
     {% endfor %}
   </select>
-
   <label for="drift-count">Probka wierszy (domyslnie {{ monitoring_cfg.default_simulate_count }})</label>
   <input type="number" id="drift-count" class="input-text" min="500" max="50000"
          value="{{ monitoring_cfg.default_simulate_count }}" />
-
   <div class="btn-row">
-    <button type="button" class="btn-primary" id="btn-simulate-drift" data-skip-reload>Symuluj zmiane rynku</button>
-    <button type="button" class="btn-secondary" data-job="drift_report" data-skip-reload>Raport driftu</button>
-    <button type="button" class="btn-primary" data-job="check_drift_retrain" data-skip-reload>Sprawdz drift i retrenuj</button>
+    <button type="button" class="btn-secondary" id="btn-simulate-drift" data-skip-reload>Symuluj zmiane rynku</button>
     {% if simulation_active %}
     <button type="button" class="btn-secondary" data-job="clear_drift_simulation" data-skip-reload>Wylacz symulacje</button>
     {% endif %}
   </div>
-  <p class="muted">Retrening uruchamia sie tylko przy alertcie driftu. Harmonogram Prefect: <code>monitor_and_retrain</code> (wymaga <code>auto_retrain_enabled: true</code>).</p>
 </section>
 
+{# ── HISTORIA RAPORTOW ── #}
 {% if reports %}
-<section class="info-box">
-  <h2>Historia raportow</h2>
+<section class="info-box" style="margin-top:1rem">
+  <h2>Historia raportow Evidently</h2>
   <ul>
     {% for r in reports %}
-    <li><a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.name }}</a> <span class="muted">{{ r.modified }}</span></li>
+    <li><a href="{{ r.url }}" target="_blank" rel="noopener" class="app-link">{{ r.name }} ↗</a> <span class="muted">{{ r.modified }}</span></li>
     {% endfor %}
   </ul>
 </section>

@@ -15,6 +15,7 @@ from api.predictor import predictor
 from api.schemas import SalaryPredictRequest
 from src.config import PROJECT_ROOT
 from src.portal.paths_status import get_paths_status
+from src.processed_artifacts import DWH_SUMMARY, ETL_SUMMARY, PREPARE_SUMMARY
 
 router = APIRouter(tags=["portal"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
@@ -33,13 +34,14 @@ def _paths() -> dict[str, bool]:
     return paths
 
 
-def _ctx(request: Request, **extra):
+def _ctx(request: Request, active_page: str = "", **extra):
     base = {
         "request": request,
         "mlflow_url": MLFLOW_PUBLIC_URL,
         "prefect_ui_url": PREFECT_PUBLIC_URL,
         "model_loaded": predictor.is_loaded,
         "paths": _paths(),
+        "active_page": active_page,
     }
     base.update(extra)
     return base
@@ -53,12 +55,12 @@ def _read_json(path: Path) -> dict:
 
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    return templates.TemplateResponse(request, "home.html", _ctx(request))
+    return templates.TemplateResponse(request, "home.html", _ctx(request, active_page="home"))
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
-    return templates.TemplateResponse(request, "dashboard.html", _ctx(request))
+    return templates.TemplateResponse(request, "dashboard.html", _ctx(request, active_page="dashboard"))
 
 
 def _predict_ctx(request: Request, **extra):
@@ -81,7 +83,7 @@ def predict_page(
     return templates.TemplateResponse(
         request,
         "predict.html",
-        _predict_ctx(request, result=result, error=error, warning=warning),
+        _predict_ctx(request, active_page="predict", result=result, error=error, warning=warning),
     )
 
 
@@ -142,6 +144,7 @@ def predict_form(
             "predict.html",
             _predict_ctx(
                 request,
+                active_page="predict",
                 result=round(salary, 2),
                 error=None,
                 warning=warning,
@@ -152,7 +155,7 @@ def predict_form(
         return templates.TemplateResponse(
             request,
             "predict.html",
-            _predict_ctx(request, result=None, error=str(exc), inputs=inputs),
+            _predict_ctx(request, active_page="predict", result=None, error=str(exc), inputs=inputs),
         )
 
 
@@ -166,46 +169,73 @@ def prefect_redirect():
     return RedirectResponse(url=PREFECT_PUBLIC_URL, status_code=302)
 
 
-@router.get("/docs/training", response_class=HTMLResponse)
-def docs_training(request: Request):
+def _training_ctx(request: Request, active_page: str = "model"):
     from src.processed_artifacts import TRAINING_SUMMARY
+    from src.portal.params_io import load_params_file
 
     raw_metrics = _read_json(TRAINING_SUMMARY)
     metrics = raw_metrics.get("metrics", raw_metrics) if raw_metrics else {}
-    from src.portal.params_io import load_params_file
-
     params = load_params_file()
     params_text = yaml.dump(params, allow_unicode=True, default_flow_style=False) if params else ""
     tuning = params.get("tuning") or {}
     grid = tuning.get("param_grid") or {}
-    return templates.TemplateResponse(
+    dvc_metrics = _read_json(PROCESSED / "metrics.json")
+    return _ctx(
         request,
-        "docs_training.html",
-        _ctx(
-            request,
-            metrics=metrics,
-            params_text=params_text,
-            tuning_enabled=tuning.get("enabled", True),
-            grid_n=",".join(str(x) for x in grid.get("n_estimators", [500, 800])),
-            grid_d=",".join(str(x) for x in grid.get("max_depth", [6, 7, 8])),
-            grid_lr=",".join(str(x) for x in grid.get("learning_rate", [0.03, 0.05])),
-        ),
+        active_page=active_page,
+        metrics=metrics,
+        params_text=params_text,
+        tuning_enabled=tuning.get("enabled", True),
+        grid_n=",".join(str(x) for x in grid.get("n_estimators", [500, 800])),
+        grid_d=",".join(str(x) for x in grid.get("max_depth", [6, 7, 8])),
+        grid_lr=",".join(str(x) for x in grid.get("learning_rate", [0.03, 0.05])),
+        dvc_metrics=dvc_metrics,
     )
 
 
-@router.get("/docs/dvc", response_class=HTMLResponse)
+@router.get("/docs/training", response_class=HTMLResponse)
+def docs_training(request: Request):
+    return templates.TemplateResponse(request, "docs_training.html", _training_ctx(request))
+
+
+@router.get("/model", response_class=HTMLResponse)
+def model_page(request: Request):
+    return templates.TemplateResponse(request, "docs_training.html", _training_ctx(request))
+
+
+@router.get("/docs/dvc")
 def docs_dvc(request: Request):
-    dvc_metrics = _read_json(PROCESSED / "metrics.json")
-    return templates.TemplateResponse(
+    return RedirectResponse(url="/model", status_code=301)
+
+
+@router.get("/dvc")
+def dvc_redirect(request: Request):
+    return RedirectResponse(url="/model", status_code=301)
+
+
+def _etl_ctx(request: Request, active_page: str = "etl") -> dict:
+    prepare_summary = _read_json(PREPARE_SUMMARY)
+    etl_summary = _read_json(ETL_SUMMARY)
+    dwh_summary = _read_json(DWH_SUMMARY)
+    last_run = etl_summary or prepare_summary
+    return _ctx(
         request,
-        "docs_dvc.html",
-        _ctx(request, dvc_metrics=dvc_metrics),
+        active_page=active_page,
+        prepare_summary=prepare_summary,
+        etl_summary=etl_summary,
+        dwh_summary=dwh_summary,
+        last_run=last_run,
     )
 
 
 @router.get("/docs/etl", response_class=HTMLResponse)
 def docs_etl(request: Request):
-    return templates.TemplateResponse(request, "docs_etl.html", _ctx(request))
+    return templates.TemplateResponse(request, "docs_etl.html", _etl_ctx(request))
+
+
+@router.get("/etl", response_class=HTMLResponse)
+def etl_page(request: Request):
+    return templates.TemplateResponse(request, "docs_etl.html", _etl_ctx(request))
 
 
 @router.get("/monitoring", response_class=HTMLResponse)
@@ -224,6 +254,7 @@ def monitoring_page(request: Request):
         "monitoring.html",
         _ctx(
             request,
+            active_page="monitoring",
             drift_metrics=metrics,
             monitoring_cfg=cfg,
             scenarios=SCENARIOS,

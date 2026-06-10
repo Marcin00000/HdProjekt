@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 
-from src.cleaning.preprocess import clean_dataframe
+from src.cleaning.preprocess import build_gold_aggregates, clean_dataframe
 from src.config import PROJECT_ROOT, find_local_raw_csv
 from src.etl.lake_io import read_raw_csv
 from src.train.train_model import load_params, train_xgboost
@@ -42,9 +42,15 @@ def run_prepare(params: dict[str, Any] | None = None) -> dict[str, Any]:
         salary_quantile_high=float(prep.get("salary_quantile_high", 0.99)),
         max_experience_years=int(prep.get("max_experience_years", 40)),
     )
+    if silver.isnull().sum().sum() != 0:
+        raise ValueError("Silver zawiera NaN po czyszczeniu — sprawdz dane wejsciowe i params.yaml")
 
     SILVER_PARQUET.parent.mkdir(parents=True, exist_ok=True)
     silver.to_parquet(SILVER_PARQUET, index=False)
+
+    gold_tables = build_gold_aggregates(silver)
+    for name, table in gold_tables.items():
+        table.to_parquet(SILVER_PARQUET.parent / f"{name}.parquet", index=False)
 
     summary = {
         "source": source,

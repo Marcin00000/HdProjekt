@@ -21,6 +21,8 @@ stages:
           - prepare.max_experience_years
     outs:
       - data/processed/cleaned.parquet
+      - data/processed/salary_by_location.parquet
+      - data/processed/salary_by_location_industry.parquet
 
   train:
     cmd: python scripts/dvc_train.py

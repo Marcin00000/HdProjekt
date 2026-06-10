@@ -64,12 +64,13 @@ def check_drift_and_retrain(
     3) Opcjonalnie train_fast / train + nowy baseline.
     """
     cfg = load_monitoring_config()
-    finished_at = datetime.now(timezone.utc).isoformat()
+    started_at = datetime.now(timezone.utc).isoformat()
 
     if not baseline_exists():
         msg = "Brak training_baseline — najpierw wytrenuj model."
         audit = {
-            "finished_at": finished_at,
+            "started_at": started_at,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
             "retrained": False,
             "skipped_reason": "no_baseline",
             "message": msg,
@@ -88,7 +89,7 @@ def check_drift_and_retrain(
     log(metrics.get("message", ""))
 
     audit: dict[str, Any] = {
-        "finished_at": finished_at,
+        "started_at": started_at,
         "drift_metrics": {
             "drift_alert": metrics.get("drift_alert"),
             "share_drifted_columns": metrics.get("share_drifted_columns"),
@@ -109,6 +110,7 @@ def check_drift_and_retrain(
         elif not manual and not cfg.get("auto_retrain_enabled"):
             reason = "auto_retrain_disabled"
         audit["skipped_reason"] = reason
+        audit["finished_at"] = datetime.now(timezone.utc).isoformat()
         audit["message"] = (
             "Retrening pominiety — brak alertu driftu lub wylaczona automatyzacja."
             if reason != "insufficient_data"
@@ -147,6 +149,7 @@ def check_drift_and_retrain(
                 f"Retrening zakonczony (run_id={train_result.get('best_run_id')}). "
                 "Baseline zaktualizowany. Model gotowy do przeładowania w API."
             ),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
         }
     )
     _write_audit(audit)

@@ -1,43 +1,114 @@
 {% extends "base.html" %}
 {% block title %}Strona glowna — Job Salary Portal{% endblock %}
+
+{% block page_info %}
+<h4>O projekcie</h4>
+<p>System prognozowania wynagrodzeń w IT i na rynku pracy powstał jako kompleksowy projekt integrujący nowoczesne podejście do inżynierii danych (Data Engineering) oraz uczenia maszynowego (MLOps). Portal umożliwia automatyczne pobieranie, oczyszczanie, składowanie w chmurze Azure, analizę, predykcję oraz monitorowanie jakości modeli.</p>
+
+<h4>Cykl życia danych i potok (Pipeline)</h4>
+<ol>
+  <li><strong>Przygotowanie i ETL</strong>: Automatyczny pobór danych źródłowych z formatu CSV, walidacja jakościowa w procesie ETL (warstwy Silver/Gold) oraz migracja i załadowanie danych do relacyjnej hurtowni danych Azure SQL Database w zoptymalizowanym schemacie gwiazdy.</li>
+  <li><strong>Uczenie i wersjonowanie (ML)</strong>: Cykliczny trening modelu XGBoost z automatycznym strojeniem hiperparametrów (Grid Search) i walidacją krzyżową. Wszystkie metryki oraz artefakty są wersjonowane za pomocą narzędzia DVC (z backendem na Azure Blob Storage) i logowane w serwerze MLflow.</li>
+  <li><strong>Serwowanie i analiza</strong>: Udostępnienie interaktywnego, responsywnego dashboardu analitycznego z wykresami Chart.js oraz interfejsu webowego i API REST (FastAPI) do wnioskowania (predykcji) w czasie rzeczywistym.</li>
+  <li><strong>Monitoring i jakość (MLOps)</strong>: Ciągły nadzór nad stabilnością środowiska poprzez wykrywanie dryfu danych (Data Drift) przy użyciu biblioteki Evidently. W przypadku wykrycia pogorszenia parametrów danych, orkiestrator Prefect automatycznie uruchamia procedurę ponownego uczenia (auto-retrain).</li>
+</ol>
+
+<h4>Struktura i technologie</h4>
+<ul>
+  <li><strong>Przechowywanie danych</strong>: Azure Data Lake Storage Gen2, Azure SQL Database.</li>
+  <li><strong>Przetwarzanie i ML</strong>: Python (Pandas, Scikit-Learn, XGBoost), DVC (Data Version Control).</li>
+  <li><strong>Śledzenie i MLOps</strong>: MLflow, Prefect, Evidently.</li>
+  <li><strong>Backend i UI</strong>: FastAPI, Jinja2, Chart.js, HTML5, Vanilla CSS.</li>
+  <li><strong>Infrastruktura</strong>: Konteneryzacja za pomocą Docker i Docker Compose.</li>
+</ul>
+
+<h4>Szybki start (Local Dev)</h4>
+<p>Skopiuj plik konfiguracji <code>.env.example</code> jako <code>.env</code> i dostosuj parametry bazodanowe oraz chmurowe. Umieść surowe dane CSV w folderze <code>input/</code> i uruchom całe środowisko komendą <code>docker compose up --build</code>.</p>
+{% endblock %}
+
 {% block content %}
 <section class="hero">
   <h1>Portal analityczny i ML</h1>
-  <p>Hurtownia danych Azure SQL, pipeline DVC, trening XGBoost w MLflow oraz prognoza pensji.</p>
+  <p>Hurtownia danych Azure SQL, pipeline ETL, model XGBoost z wersjonowaniem oraz monitoring driftu.</p>
 </section>
-<div class="card-grid">
-  <a class="card" href="/dashboard">
-    <h2>Dashboard</h2>
-    <p>Wykresy z hurtowni (lokalizacja, wyksztalcenie, praca zdalna).</p>
-  </a>
-  <a class="card" href="/predict">
-    <h2>Prognoza pensji</h2>
-    <p>Formularz webowy — ten sam model co endpoint <code>POST /predict</code>.</p>
-  </a>
-  <a class="card" href="/mlflow" target="_blank" rel="noopener">
-    <h2>MLflow UI</h2>
-    <p>Eksperymenty, metryki RMSE/MAE/R², rejestr modeli.</p>
-  </a>
-  <a class="card" href="/docs/training">
-    <h2>Trening ML</h2>
-    <p>Uruchom XGBoost + MLflow, przeladuj model w API.</p>
-  </a>
-  <a class="card" href="/docs/dvc">
-    <h2>Pipeline DVC</h2>
-    <p>dvc repro, push na Azure remote — z przegladarki.</p>
-  </a>
-  <a class="card" href="/docs/etl">
-    <h2>ETL / Prefect</h2>
-    <p>Uruchom przygotowanie danych, zaladuj SQL, pelny flow Prefect.</p>
-  </a>
-  <a class="card" href="/monitoring">
-    <h2>Monitoring driftu</h2>
-    <p>Evidently, symulacja driftu (demo), raporty HTML.</p>
-  </a>
+
+<div class="pipeline-stepper">
+  <div class="pipeline-step">
+    <span class="step-number">Krok 1</span>
+    <p class="step-title">Przygotowanie danych</p>
+    <p class="step-desc">ETL raw → silver → gold → Azure SQL</p>
+    {% if paths.silver %}
+    <span class="step-status ok">&#10003; Silver dostepna</span>
+    {% elif paths.raw_csv %}
+    <span class="step-status warn">&#9888; CSV gotowy — uruchom ETL</span>
+    {% else %}
+    <span class="step-status warn">&#9888; Brak danych wejsciowych</span>
+    {% endif %}
+    <a class="step-link" href="/etl">Uruchom ETL &rarr;</a>
+  </div>
+
+  <div class="pipeline-step">
+    <span class="step-number">Krok 2</span>
+    <p class="step-title">Model i wersjonowanie</p>
+    <p class="step-desc">XGBoost, MLflow, DVC pipeline</p>
+    {% if model_loaded and paths.silver %}
+    <span class="step-status ok">&#10003; Model zaladowany</span>
+    {% elif paths.silver %}
+    <span class="step-status warn">&#9888; Silver OK — wymaga treningu</span>
+    {% else %}
+    <span class="step-status muted">&#9675; Wymaga danych (krok 1)</span>
+    {% endif %}
+    <a class="step-link" href="/model">Trenuj model &rarr;</a>
+  </div>
+
+  <div class="pipeline-step">
+    <span class="step-number">Krok 3</span>
+    <p class="step-title">Analiza wynikow</p>
+    <p class="step-desc">Dashboard i prognoza pensji</p>
+    {% if paths.silver %}
+    <span class="step-status ok">&#10003; Dane dostepne</span>
+    {% else %}
+    <span class="step-status muted">&#9675; Wymaga danych (krok 1)</span>
+    {% endif %}
+    <a class="step-link" href="/dashboard">Zobacz dashboard &rarr;</a>
+  </div>
+
+  <div class="pipeline-step">
+    <span class="step-number">Krok 4</span>
+    <p class="step-title">Monitoring</p>
+    <p class="step-desc">Drift danych, auto-retrain Prefect</p>
+    {% if paths.silver and model_loaded %}
+    <span class="step-status ok">&#10003; Gotowy do monitoringu</span>
+    {% elif model_loaded %}
+    <span class="step-status warn">&#9888; Brak silver — uruchom ETL</span>
+    {% else %}
+    <span class="step-status muted">&#9675; Wymaga modelu (krok 2)</span>
+    {% endif %}
+    <a class="step-link" href="/monitoring">Sprawdz drift &rarr;</a>
+  </div>
 </div>
-<section class="info-box">
-  <h3>Produkcja (Docker)</h3>
-  <pre>docker compose up --build</pre>
-  <p>Portal: <code>http://localhost:8080</code> &middot; MLflow: <code>{{ mlflow_url }}</code></p>
+
+<section>
+  <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:2rem 0 0.75rem;padding-bottom:.5rem;border-bottom:1px solid #2a3548">Narzedzia zewnetrzne</h2>
+  <div class="tools-grid">
+    <a class="tool-card" href="/mlflow" target="_blank" rel="noopener">
+      <div class="tool-card-text">
+        <h3>MLflow ↗</h3>
+        <p>Eksperymenty, metryki, rejestr modeli</p>
+      </div>
+    </a>
+    <a class="tool-card" href="/prefect" target="_blank" rel="noopener">
+      <div class="tool-card-text">
+        <h3>Prefect ↗</h3>
+        <p>Historia pipeline ETL i harmonogram</p>
+      </div>
+    </a>
+    <a class="tool-card" href="/docs" target="_blank" rel="noopener">
+      <div class="tool-card-text">
+        <h3>REST API ↗</h3>
+        <p>Swagger / OpenAPI — <code>POST /predict</code></p>
+      </div>
+    </a>
+  </div>
 </section>
 {% endblock %}

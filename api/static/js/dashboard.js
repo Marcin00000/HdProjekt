@@ -11,129 +11,249 @@ function destroyCharts() {
   });
 }
 
+// Nowoczesna paleta premium z przejsciami
+const PALETTE = [
+  "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b",
+  "#06b6d4", "#ec4899", "#ef4444", "#6366f1"
+];
+
+function paletteColors(n) {
+  return Array.from({ length: n }, (_, i) => PALETTE[i % PALETTE.length]);
+}
+
+function fmtUSD(val) {
+  if (val == null || isNaN(val)) return "";
+  if (val >= 1000) return "$" + Math.round(val / 1000) + "k";
+  return "$" + Math.round(val);
+}
+
 async function loadDashboard() {
   const sourceEl = document.getElementById("data-source");
   destroyCharts();
 
+  // Stan ladowania
+  document.querySelectorAll(".chart-loading").forEach(el => el.style.display = "flex");
+
   let data = {};
   try {
-    const r = await fetch("/api/dashboard");
+    const r = await fetch("/api/dashboard?_=" + Date.now());
     data = await r.json();
   } catch (e) {
     if (sourceEl) sourceEl.textContent = "Blad pobierania danych: " + e.message;
+    document.querySelectorAll(".chart-loading").forEach(el => el.style.display = "none");
     return;
   }
 
+  document.querySelectorAll(".chart-loading").forEach(el => el.style.display = "none");
+
   if (sourceEl) {
     let msg = "Zrodlo: " + (data.source || "brak");
-    if (data.sql_error) msg += " | SQL: " + data.sql_error;
-    if (data.error) msg += " | " + data.error;
-    if (data.hint) msg += " | " + data.hint;
-    if (data.table_counts && data.table_counts.fact_rows) {
-      msg += " | wiersze: " + Number(data.table_counts.fact_rows).toLocaleString("pl-PL");
-    }
+    if (data.sql_error) msg += " \u00b7 SQL: " + data.sql_error;
+    if (data.error) msg += " \u00b7 " + data.error;
+    if (data.hint) msg += " \u00b7 " + data.hint;
     sourceEl.textContent = msg;
   }
 
-  const chartDefaults = {
-    responsive: true,
-    maintainAspectRatio: true,
-    plugins: { legend: { display: false } },
-    scales: {
-      x: { ticks: { color: "#8b9cb3", maxRotation: 45 }, grid: { color: "#2a3548" } },
-      y: { ticks: { color: "#8b9cb3" }, grid: { color: "#2a3548" } },
+  // KPI cards
+  const overall = data.overall || {};
+  const factRows = (data.table_counts && data.table_counts.fact_rows) || overall.total_records;
+  const fmtBig = (n) => n != null ? "$" + Math.round(n).toLocaleString("pl-PL") : "\u2014";
+  const fmtN   = (n) => n != null ? Number(n).toLocaleString("pl-PL") : "\u2014";
+  const setKpi = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setKpi("kpi-records", fmtN(overall.total_records ?? factRows));
+  setKpi("kpi-avg",     fmtBig(overall.avg_salary));
+  setKpi("kpi-median",  fmtBig(overall.median_salary));
+  setKpi("kpi-source",  (data.source || "\u2014")
+    .replace("silver_parquet+azure_sql", "silver + SQL")
+    .replace("silver_parquet", "silver")
+    .replace("azure_sql", "SQL")
+    .replace("gold_parquet", "gold")
+    .replace("raw_csv", "raw CSV"));
+  const hintEl = document.getElementById("kpi-source-hint");
+  if (hintEl) hintEl.textContent = data.sql_error ? "SQL: " + data.sql_error : (data.hint || "");
+
+  // Wspolne ustawienia osi
+  const axisStyle = {
+    ticks: { color: "#8b9cb3", font: { size: 11 } },
+    grid: { color: "rgba(42,53,72,0.8)" },
+    border: { color: "transparent" },
+  };
+
+  const tooltip = {
+    backgroundColor: "#0f1419",
+    borderColor: "#2a3548",
+    borderWidth: 1,
+    titleColor: "#e7ecf3",
+    bodyColor: "#8b9cb3",
+    padding: 10,
+    callbacks: {
+      label: (ctx) => {
+        const v = ctx.parsed.x ?? ctx.parsed.y;
+        return " " + (v >= 1000 ? "$" + Math.round(v).toLocaleString("pl-PL") : v);
+      },
     },
   };
 
-  function barChart(id, labels, values, label, horizontal) {
+  const tooltipCount = {
+    ...tooltip,
+    callbacks: {
+      label: (ctx) => " " + (ctx.parsed.x ?? ctx.parsed.y).toLocaleString("pl-PL") + " ofert",
+    },
+  };
+
+  function barChart(id, labels, values, { horizontal = false, multicolor = false, formatY = true, tooltipCfg } = {}) {
     const canvas = document.getElementById(id);
     if (!canvas) return;
-    const parent = canvas.parentElement;
     if (!labels.length) {
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#8b9cb3";
-      ctx.font = "14px sans-serif";
-      ctx.fillText("Brak danych", 10, 40);
+      canvas.parentElement.querySelector(".chart-empty")?.style && (canvas.parentElement.querySelector(".chart-empty").style.display = "block");
       return;
     }
+    const colors = multicolor ? paletteColors(labels.length) : Array(labels.length).fill("#3b82f6");
+    const hoverColors = multicolor ? paletteColors(labels.length).map(c => c + "cc") : Array(labels.length).fill("#60a5fa");
+
+    const xAxis = { ...axisStyle };
+    const yAxis = { ...axisStyle };
+    if (formatY) {
+      if (horizontal) {
+        xAxis.ticks = { ...xAxis.ticks, callback: (v) => fmtUSD(v) };
+      } else {
+        yAxis.ticks = { ...yAxis.ticks, callback: (v) => fmtUSD(v) };
+      }
+    }
+
+    // Tworzenie gradientu
+    const ctx = canvas.getContext("2d");
+    let bgColors = colors;
+    let hovColors = hoverColors;
+    
+    // Jesli kolor jest jeden i nie ma multicolor, zrobmy piekny poziomy/pionowy gradient
+    if (!multicolor && colors.length > 0) {
+      const grad = horizontal 
+        ? ctx.createLinearGradient(0, 0, canvas.parentElement.clientWidth, 0)
+        : ctx.createLinearGradient(0, 0, 0, canvas.parentElement.clientHeight);
+      grad.addColorStop(0, "#3b82f6");
+      grad.addColorStop(1, "#8b5cf6");
+      bgColors = grad;
+      
+      const gradHover = horizontal 
+        ? ctx.createLinearGradient(0, 0, canvas.parentElement.clientWidth, 0)
+        : ctx.createLinearGradient(0, 0, 0, canvas.parentElement.clientHeight);
+      gradHover.addColorStop(0, "#60a5fa");
+      gradHover.addColorStop(1, "#a78bfa");
+      hovColors = gradHover;
+    }
+
     chartInstances[id] = new Chart(canvas, {
       type: "bar",
       data: {
         labels,
-        datasets: [{ label, data: values, backgroundColor: "rgba(59, 130, 246, 0.75)" }],
+        datasets: [{
+          data: values,
+          backgroundColor: bgColors,
+          hoverBackgroundColor: hovColors,
+          borderRadius: 6,
+          borderSkipped: false,
+          barPercentage: 0.7,
+        }],
       },
       options: {
-        ...chartDefaults,
+        responsive: true,
+        maintainAspectRatio: false,
         indexAxis: horizontal ? "y" : "x",
+        animation: { duration: 1200, easing: "easeOutQuart" },
+        plugins: {
+          legend: { display: false },
+          tooltip: tooltipCfg || tooltip,
+        },
+        scales: horizontal
+          ? { x: xAxis, y: { ...axisStyle, ticks: { ...axisStyle.ticks, maxRotation: 0 } } }
+          : { x: { ...axisStyle, ticks: { ...axisStyle.ticks, maxRotation: 30 } }, y: yAxis },
       },
     });
   }
 
+  // Lokalizacja
   const loc = data.by_location || [];
-  barChart(
-    "chartLocation",
-    loc.map((r) => r.location),
-    loc.map((r) => Math.round(Number(r.avg_salary) || 0)),
-    "Srednia pensja (USD)"
+  barChart("chartLocation",
+    loc.map(r => r.location),
+    loc.map(r => Math.round(Number(r.avg_salary) || 0)),
+    { horizontal: true, multicolor: true }
   );
 
-  const edu = data.by_education || [];
-  barChart(
-    "chartEducation",
-    edu.map((r) => r.education_level),
-    edu.map((r) => Math.round(Number(r.avg_salary) || 0)),
-    "Srednia pensja (USD)"
-  );
-
-  const ind = data.by_industry || [];
-  barChart(
-    "chartIndustry",
-    ind.map((r) => r.industry),
-    ind.map((r) => Math.round(Number(r.avg_salary) || 0)),
-    "Srednia pensja (USD)",
-    true
-  );
-
-  const comp = data.by_company_size || [];
-  barChart(
-    "chartCompany",
-    comp.map((r) => r.company_size),
-    comp.map((r) => Math.round(Number(r.avg_salary) || 0)),
-    "Srednia pensja (USD)"
-  );
-
-  const rem = data.by_remote || [];
-  barChart(
-    "chartRemote",
-    rem.map((r) => r.remote_work),
-    rem.map((r) => Math.round(Number(r.avg_salary) || 0)),
-    "Srednia pensja (USD)"
-  );
-
-  const exp = data.by_experience || [];
-  barChart(
-    "chartExperience",
-    exp.map((r) => r.exp_bucket || r.label),
-    exp.map((r) => Math.round(Number(r.avg_salary) || 0)),
-    "Srednia pensja (USD)"
-  );
-
-  const jobs = data.by_job_title || [];
-  barChart(
-    "chartJobTitle",
-    jobs.map((r) => r.job_title),
-    jobs.map((r) => Math.round(Number(r.avg_salary) || 0)),
-    "Srednia pensja (USD)",
-    true
-  );
-
+  // Rozklad pensji — gradient
   const dist = data.salary_distribution || [];
-  barChart(
-    "chartSalaryDist",
-    dist.map((r) => r.bin),
-    dist.map((r) => r.count),
-    "Liczba ofert"
+  if (dist.length) {
+    const canvas = document.getElementById("chartSalaryDist");
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      const grad = ctx.createLinearGradient(0, 0, canvas.width || 400, 0);
+      grad.addColorStop(0, "#3b82f6");
+      grad.addColorStop(1, "#8b5cf6");
+      chartInstances["chartSalaryDist"] = new Chart(canvas, {
+        type: "bar",
+        data: {
+          labels: dist.map(r => r.bin),
+          datasets: [{ data: dist.map(r => r.count), backgroundColor: grad, borderRadius: 3, borderSkipped: false }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: { legend: { display: false }, tooltip: tooltipCount },
+          scales: {
+            x: { ...axisStyle, ticks: { ...axisStyle.ticks, maxRotation: 45, font: { size: 9 } } },
+            y: { ...axisStyle, ticks: { ...axisStyle.ticks, callback: (v) => v >= 1000 ? (v/1000)+"k" : v } },
+          },
+        },
+      });
+    }
+  }
+
+  // Wyksztalcenie
+  const edu = data.by_education || [];
+  barChart("chartEducation",
+    edu.map(r => r.education_level),
+    edu.map(r => Math.round(Number(r.avg_salary) || 0)),
+    { multicolor: true }
+  );
+
+  // Doswiadczenie
+  const exp = data.by_experience || [];
+  barChart("chartExperience",
+    exp.map(r => r.exp_bucket || r.label),
+    exp.map(r => Math.round(Number(r.avg_salary) || 0)),
+    {}
+  );
+
+  // Top stanowiska
+  const jobs = data.by_job_title || [];
+  barChart("chartJobTitle",
+    jobs.map(r => r.job_title),
+    jobs.map(r => Math.round(Number(r.avg_salary) || 0)),
+    { horizontal: true, multicolor: true }
+  );
+
+  // Branza
+  const ind = data.by_industry || [];
+  barChart("chartIndustry",
+    ind.map(r => r.industry),
+    ind.map(r => Math.round(Number(r.avg_salary) || 0)),
+    { horizontal: true, multicolor: true }
+  );
+
+  // Wielkosc firmy
+  const comp = data.by_company_size || [];
+  barChart("chartCompany",
+    comp.map(r => r.company_size),
+    comp.map(r => Math.round(Number(r.avg_salary) || 0)),
+    { multicolor: true }
+  );
+
+  // Praca zdalna
+  const rem = data.by_remote || [];
+  barChart("chartRemote",
+    rem.map(r => r.remote_work),
+    rem.map(r => Math.round(Number(r.avg_salary) || 0)),
+    { multicolor: true }
   );
 }
 

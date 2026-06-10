@@ -68,7 +68,7 @@ def _apply_salary_scenario(df: pd.DataFrame, scenario: str, rng: np.random.Gener
         out[TARGET] = (salaries * factor).astype(int)
     elif scenario == "industry_tech":
         tech = out["industry"].astype(str) == "Technology"
-        out.loc[tech, TARGET] = (salaries[tech] * rng.uniform(1.18, 1.32)).astype(int)
+        out.loc[tech, TARGET] = (salaries[tech] * rng.uniform(1.18, 1.32, size=tech.sum())).astype(int)
     elif scenario == "salary_features_combo":
         out[TARGET] = (salaries * rng.uniform(1.15, 1.30, size=len(out))).astype(int)
     elif scenario == "experience_high":

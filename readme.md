@@ -2,6 +2,15 @@
 
 System wspiera szacowanie rynkowej pensji na podstawie cech oferty pracy. Łączy hurtownię danych w chmurze Microsoft Azure, pipeline przetwarzania danych, model regresji **XGBoost**, aplikację webową **FastAPI** oraz narzędzia utrzymania modelu (MLflow, DVC, Prefect, Evidently).
 
+## O portalu (Dashboardzie)
+
+Główny portal aplikacyjny (dostępny domyślnie pod `http://localhost:8080` w Dockerze lub `http://localhost:8000` lokalnie) stanowi zintegrowane centrum sterowania i monitoringu:
+- **Dashboard analityczny**: Wizualizuje rozkłady i średnie roczne zarobki brutto (w USD) w podziale na 8 różnych przekrojów rynkowych na dynamicznych wykresach Chart.js.
+- **Moduł prognozy (Inference)**: Umożliwia natychmiastowe szacowanie płac na bazie 9 cech wejściowych z walidacją Pydantic i wykrywaniem wartości nietypowych.
+- **Zarządzanie zadaniami (Jobs)**: Umożliwia ręczne uruchamianie oraz podgląd statusu/logów procesów w tle (czyszczenie ETL, ładowanie hurtowni DWH, szybki i pełny trening modelu).
+- **Monitoring MLOps**: Monitoruje poziom dryfu danych i dryfu celu (Evidently) w odniesieniu do bazy treningowej wraz z listą historycznych raportów HTML.
+- **Integracja zewnętrzna**: Zapewnia wygodne odnośniki i przekierowania do serwera MLflow, panelu Prefect oraz Swagger UI REST API.
+
 ## Problem biznesowy
 
 Organizacje i analitycy rynku pracy potrzebują szybkiego oszacowania wynagrodzenia przy tworzeniu ofert, negocjacjach i raportach. Ręczne porównywanie tysięcy ogłoszeń jest czasochłonne. System automatyzuje ten proces: dane ofert trafiają do hurtowni, model uczy się zależności między cechami a pensją, a wynik jest dostępny przez interfejs webowy i API.
@@ -126,6 +135,13 @@ flowchart TB
 | `/docs/training` | Trening modelu |
 | `/docs/dvc` | Pipeline DVC |
 | `/mlflow` | Przekierowanie do MLflow UI |
+
+### Dashboard analityczny
+
+Interaktywny panel (dostępny pod `/dashboard`) prezentuje kluczowe statystyki rynkowe na responsywnych wykresach Chart.js:
+- **Karty KPI**: liczba ofert w silver, średnia i mediana rocznych zarobków w USD brutto oraz status źródła danych (Silver Parquet / Azure SQL DWH).
+- **Rozkład i przekroje**: rozkład pensji (histogram), średnie zarobki wg lokalizacji (top 10), branży, formy pracy (zdalna/stacjonarna), wielkości firmy, poziomu wykształcenia oraz doświadczenia.
+- **Optymalizacja**: wykresy dynamicznie dostosowują się do rozmiaru kart (Flexbox + wrappers), a przycisk odświeżania omija pamięć podręczną przeglądarki za pomocą timestamp cache-bustera.
 
 ### API REST
 

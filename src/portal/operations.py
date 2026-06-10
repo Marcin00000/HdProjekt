@@ -50,7 +50,16 @@ def run_prepare(*, upload_lake: bool = False) -> dict[str, Any]:
         f"({len(raw):,} wierszy)"
     )
     progress(30, "Przygotowanie — czyszczenie i silver")
-    silver, stats = clean_dataframe(raw)
+    params = load_params_file()
+    prepare_cfg = params.get("prepare", {})
+    silver, stats = clean_dataframe(
+        raw,
+        salary_quantile_low=prepare_cfg.get("salary_quantile_low", 0.01),
+        salary_quantile_high=prepare_cfg.get("salary_quantile_high", 0.99),
+        max_experience_years=prepare_cfg.get("max_experience_years", 40),
+    )
+    if silver.isnull().sum().sum() != 0:
+        raise ValueError("Silver zawiera NaN po czyszczeniu — sprawdz dane wejsciowe i params.yaml")
     PROCESSED.mkdir(parents=True, exist_ok=True)
     silver.to_parquet(SILVER, index=False)
 
@@ -90,13 +99,42 @@ def run_load_dwh() -> dict[str, Any]:
     from src.etl.load_dwh import verify_load
 
     verified = verify_load(engine)
+
+    discrepancies: dict[str, dict] = {}
+    for table, expected in loaded.items():
+        actual = verified.get(table, 0)
+        if actual != expected:
+            discrepancies[table] = {"expected": expected, "actual": actual}
+            log(f"UWAGA: {table} — zaladowano {expected} wierszy, weryfikacja SQL: {actual}")
+
     summary = {
         "finished_at": _now(),
         "loaded": loaded,
         "verified": verified,
+        **({"discrepancies": discrepancies} if discrepancies else {}),
     }
     _write_json(DWH_SUMMARY, summary)
     return summary
+
+
+_PREFECT_CONN_KEYWORDS = (
+    "prefect",
+    "api url",
+    "connection",
+    "connect",
+    "httpx",
+    "server",
+    "timeout",
+    "handshake",
+)
+
+
+def _is_prefect_connectivity_error(exc: Exception) -> bool:
+    """Czy blad dotyczy niedostepnosci Prefect API (nie danych ani modelu)."""
+    if isinstance(exc, (ConnectionError, ImportError, OSError)):
+        return True
+    err = str(exc).lower()
+    return any(kw in err for kw in _PREFECT_CONN_KEYWORDS)
 
 
 def run_prefect_etl(*, skip_sql: bool = False) -> dict[str, Any]:
@@ -113,7 +151,14 @@ def run_prefect_etl(*, skip_sql: bool = False) -> dict[str, Any]:
             with capture_stdout_to_log():
                 return etl_main(skip_sql=skip_sql)
         except Exception as exc:
-            log(f"Flow Prefect nieudany ({exc}) — przejscie na ETL synchroniczny.")
+            if _is_prefect_connectivity_error(exc):
+                log(
+                    f"Prefect niedostepny ({type(exc).__name__}: {exc}) "
+                    "— fallback ETL synchroniczny."
+                )
+            else:
+                # Blad danych, walidacji lub SQL — propaguj, nie uruchamiaj sync ponownie
+                raise
     log("ETL synchroniczny (bez rejestracji w Prefect Server)")
     with capture_stdout_to_log():
         return run_etl_sync(skip_sql=skip_sql, upload_lake=True)

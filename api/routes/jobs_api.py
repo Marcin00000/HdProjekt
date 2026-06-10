@@ -18,9 +18,8 @@ from api.services.job_runner import job_runner
 from src.config import PROJECT_ROOT
 from src.portal.paths_status import get_paths_status
 from src.portal.operations import JOB_HANDLERS
-from src.portal.params_io import load_params_file, save_tuning_config
+from src.portal.params_io import load_merged_params as load_params, load_params_file, save_tuning_config
 from src.portal.predict_options import get_predict_field_options
-from src.train.train_model import load_params
 
 router = APIRouter(prefix="/api", tags=["operations"])
 

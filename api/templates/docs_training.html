@@ -1,14 +1,85 @@
 {% extends "base.html" %}
-{% block title %}Trening modelu{% endblock %}
+{% block title %}Model i wersjonowanie{% endblock %}
+
+{% block page_info %}
+<h4>Model Predykcyjny (XGBoost Regressor)</h4>
+<p>Do prognozowania zarobków wykorzystano algorytm <strong>XGBoost Regressor</strong> (Extreme Gradient Boosting), który jest obecnie wiodącą metodą uczenia maszynowego dla ustrukturyzowanych danych tabelarycznych. Model budowany jest na danych z warstwy <strong>Silver</strong>.</p>
+
+<h4>Eliminacja Data Leakage i Podział Danych</h4>
+<p>W celu uniknięcia błędu przeuczenia i fałszywie zawyżonych metryk wprowadzono rygorystyczny podział zbioru danych na 3 części:</p>
+<ul>
+  <li><strong>Zbiór Treningowy (64%)</strong>: służy bezpośrednio do uczenia estymatorów drzewiastych XGBoost.</li>
+  <li><strong>Zbiór Walidacyjny (16%)</strong>: służy do oceny kolejnych kombinacji hiperparametrów w trakcie przeszukiwania siatki (Grid Search) oraz do wczesnego zatrzymywania uczenia (Early Stopping).</li>
+  <li><strong>Zbiór Testowy (20%)</strong>: odizolowany, nie bierze udziału w żadnym etapie uczenia ani doboru parametrów. Służy wyłącznie do finalnej, obiektywnej ewaluacji najlepszego modelu.</li>
+</ul>
+
+<h4>Automatyczny Tuning i Hiperparametry</h4>
+<p>Strojenie modelu (Grid Search) odbywa się na siatce parametrów pobieranej z pliku <code>params.yaml</code>:</p>
+<ul>
+  <li><code>n_estimators</code>: liczba drzew decyzyjnych (np. 100, 500, 1000).</li>
+  <li><code>max_depth</code>: maksymalna głębokość pojedynczego drzewa (np. 3, 6, 8) – kontroluje stopień skomplikowania relacji.</li>
+  <li><code>learning_rate</code>: krok uczenia (współczynnik kurczenia wag).</li>
+  <li><code>early_stopping_rounds</code>: mechanizm przerywania treningu, gdy błąd na zbiorze walidacyjnym przestaje spadać przez określoną liczbę rund.</li>
+</ul>
+
+<h4>Metryki Ewaluacyjne</h4>
+<ul>
+  <li><strong>RMSE (Root Mean Squared Error)</strong>: pierwiastek średniokwadratowego błędu. Silniej karze duże pomyłki modelu. Wyrażony w USD.</li>
+  <li><strong>MAE (Mean Absolute Error)</strong>: średnia bezwzględna różnica między pensją rzeczywistą a przewidywaną. Najbardziej intuicyjna interpretacja finansowa.</li>
+  <li><strong>MAPE (Mean Absolute Percentage Error)</strong>: średni procentowy błąd względny.</li>
+  <li><strong>R² (Współczynnik Determinacji)</strong>: wskazuje, jaki odsetek wariancji zarobków jest wyjaśniany przez model (wartość blisko 1.0 oznacza doskonałe dopasowanie).</li>
+</ul>
+
+<h4>Wersjonowanie Kodu i Danych (DVC & MLflow)</h4>
+<ul>
+  <li><strong>MLflow Tracking & Registry</strong>: Każdy trening rejestruje nowy eksperyment, loguje zestaw hiperparametrów, uzyskane metryki i zapisuje finalny model. Najlepsze modele są promowane do rejestru (Model Registry), skąd API automatycznie pobiera najnowszy model produkcyjny.</li>
+  <li><strong>DVC (Data Version Control)</strong>: Ponieważ zbiory danych Parquet i pliki modeli są zbyt duże dla repozytorium Git, są one wersjonowane za pomocą DVC. Metadane są śledzone w Git, a rzeczywiste pliki wysyłane do bezpiecznego repozytorium zdalnego (Azure Blob Storage). Synchronizacja odbywa się przez <code>dvc push</code> / <code>dvc pull</code>.</li>
+</ul>
+{% endblock %}
+
 {% block content %}
-<h1>Trening modelu (XGBoost + MLflow)</h1>
+<h1>Model i wersjonowanie</h1>
+<p class="muted">Trening XGBoost z logowaniem eksperymentow do MLflow oraz pipeline DVC do wersjonowania artefaktow.</p>
 
 <section class="status-grid">
-  <div class="status-item">Warstwa silver: {% if paths.silver %}<span class="ok">dostepna</span>{% else %}<span class="warn">wymagana</span>{% endif %}</div>
-  <div class="status-item">Model produkcyjny: {% if paths.model %}<span class="ok">zaladowany</span>{% else %}<span class="warn">brak</span>{% endif %}</div>
+  <div class="status-item">Warstwa silver: {% if paths.silver %}<span class="ok">dostepna</span>{% else %}<span class="warn">wymagana — uruchom ETL</span>{% endif %}</div>
+  <div class="status-item">Model produkcyjny: {% if paths.model %}<span class="ok">zaladowany</span>{% else %}<span class="warn">brak — uruchom trening</span>{% endif %}</div>
 </section>
 
-<section class="ops-panel tuning-panel">
+{% if metrics %}
+<div class="kpi-grid" style="margin-top:1.25rem">
+  {% if metrics.rmse is defined %}
+  <div class="kpi-card">
+    <p class="kpi-label">RMSE</p>
+    <p class="kpi-value">{{ "$%s"|format("{:,.0f}".format(metrics.rmse)) }}</p>
+    <p class="kpi-sub">blad predykcji (USD)</p>
+  </div>
+  {% endif %}
+  {% if metrics.mae is defined %}
+  <div class="kpi-card">
+    <p class="kpi-label">MAE</p>
+    <p class="kpi-value">{{ "$%s"|format("{:,.0f}".format(metrics.mae)) }}</p>
+    <p class="kpi-sub">sredni blad bezwzgledny</p>
+  </div>
+  {% endif %}
+  {% if metrics.mape_pct is defined %}
+  <div class="kpi-card">
+    <p class="kpi-label">MAPE</p>
+    <p class="kpi-value">{{ "%.1f%%"|format(metrics.mape_pct) }}</p>
+    <p class="kpi-sub">blad wzgledny</p>
+  </div>
+  {% endif %}
+  {% if metrics.r2 is defined %}
+  <div class="kpi-card">
+    <p class="kpi-label">R&sup2;</p>
+    <p class="kpi-value">{{ "%.4f"|format(metrics.r2) }}</p>
+    <p class="kpi-sub">wspolczynnik determinacji</p>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<section class="ops-panel tuning-panel" style="margin-top:1.25rem">
   <h2>Parametry strojenia hiperparametrow</h2>
   <p class="muted">Siatka wartosci (oddzielone przecinkami). Zapis trafia do pliku <code>params.yaml</code>.</p>
   <form id="tuning-form" class="tuning-form">
@@ -16,7 +87,7 @@
       <legend>Ogolne</legend>
       <label class="tuning-check">
         <input type="checkbox" id="tuning-enabled" {% if tuning_enabled %}checked{% endif %}>
-        Strojenie wlaczone (GridSearchCV)
+        Strojenie wlaczone (przeszukiwanie siatki)
       </label>
     </fieldset>
     <fieldset class="tuning-fieldset">
@@ -52,20 +123,45 @@
     <button type="button" class="btn-primary" id="btn-train">Trening z strojeniem</button>
     <button type="button" class="btn-secondary" id="btn-train-fast">Trening szybki (bez strojenia)</button>
     <button type="button" class="btn-secondary" onclick="fetch('/api/model/reload',{method:'POST'}).then(()=>location.reload())">Przeladuj model w API</button>
-    <a class="btn-secondary" href="/mlflow" target="_blank" rel="noopener">MLflow UI</a>
+    <a class="btn-secondary" href="/mlflow" target="_blank" rel="noopener">MLflow ↗</a>
   </div>
 </section>
 
-{% if metrics %}
-<section class="info-box">
-  <h2>Ostatnie metryki</h2>
-  <ul>
-    {% for k, v in metrics.items() %}
-    <li><strong>{{ k }}</strong>: {{ v }}</li>
+<details style="margin-top:1.5rem">
+  <summary style="cursor:pointer;font-weight:700;font-size:1rem;padding:0.75rem 0;border-top:1px solid #2a3548;list-style:none;display:flex;align-items:center;gap:0.5rem">
+    <span>&#9660;</span> Wersjonowanie DVC
+    <span class="muted" style="font-size:0.85rem;font-weight:400">— pipeline prepare &rarr; train, push artefaktow na Azure</span>
+  </summary>
+
+  <section class="status-grid" style="margin-top:1rem">
+    <div class="status-item" data-path-key="raw_csv">
+      Plik CSV (raw):
+      <span class="path-local ok"{% if not paths.raw_csv_local %} style="display:none"{% endif %}>lokalny</span>
+      <span class="path-azure ok"{% if not paths.raw_csv_azure %} style="display:none"{% endif %}>Azure</span>
+      <span class="path-warn warn"{% if paths.raw_csv %} style="display:none"{% endif %}>brak</span>
+    </div>
+    <div class="status-item">Metryki pipeline: {% if dvc_metrics %}<span class="ok">zapisane</span>{% else %}<span class="warn">uruchom reprodukcje</span>{% endif %}</div>
+  </section>
+
+  {% if dvc_metrics %}
+  <div class="kpi-grid" style="margin-top:1rem">
+    {% for k, v in dvc_metrics.items() %}
+    <div class="kpi-card">
+      <p class="kpi-label">{{ k }}</p>
+      <p class="kpi-value" style="font-size:1.1rem">{{ v }}</p>
+    </div>
     {% endfor %}
-  </ul>
-</section>
-{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="btn-row" style="margin-top:1rem">
+    <button type="button" class="btn-primary" data-job="dvc_repro">Reprodukcja pipeline (pelna)</button>
+    <button type="button" class="btn-secondary" data-job="dvc_repro_fast">Reprodukcja szybka</button>
+    <button type="button" class="btn-secondary" data-job="dvc_repro_push">Reprodukcja + push</button>
+    <button type="button" class="btn-secondary" data-job="dvc_push" data-skip-reload>Push artefaktow</button>
+  </div>
+  <p class="muted" style="font-size:0.85rem;margin-top:0.75rem">Wynik operacji pojawi sie w logu treningu powyzej.</p>
+</details>
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/operations.js"></script>
