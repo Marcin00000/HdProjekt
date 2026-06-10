@@ -23,8 +23,8 @@ def load_raw_with_source() -> tuple[pd.DataFrame, str]:
     except ValueError:
         raise FileNotFoundError(
             "Brak pliku CSV: umieść job_salary_prediction_dataset.csv w katalogu input/ "
-            "lub skonfiguruj Azure Storage (AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY, "
-            "AZURE_CONTAINER w .env)."
+            "lub skonfiguruj Azure Storage (AZURE_STORAGE_ACCOUNT_NAME, "
+            "AZURE_STORAGE_ACCOUNT_KEY, AZURE_STORAGE_CONTAINER w .env)."
         )
 
     return read_raw_csv(cfg), "azure"
@@ -38,5 +38,13 @@ def load_raw_dataframe() -> pd.DataFrame:
 def load_silver_dataframe() -> pd.DataFrame:
     if SILVER_PATH.is_file():
         return pd.read_parquet(SILVER_PATH)
-    cfg = AzureStorageConfig()
+    try:
+        cfg = AzureStorageConfig()
+    except ValueError:
+        raise FileNotFoundError(
+            "Brak pliku silver (cleaned.parquet) i brak konfiguracji Azure. "
+            "Uruchom ETL lub skonfiguruj AZURE_STORAGE_ACCOUNT_NAME, "
+            "AZURE_STORAGE_ACCOUNT_KEY, AZURE_STORAGE_CONTAINER w .env."
+        )
     return read_parquet(cfg.silver_path, cfg)
+

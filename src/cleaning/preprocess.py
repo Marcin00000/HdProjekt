@@ -88,7 +88,7 @@ def clean_dataframe(
     work = work.reset_index(drop=True)
     work["salary_k"] = (work[TARGET] / 1000).round(2)
     work["high_skills"] = (work["skills_count"] >= work["skills_count"].median()).astype(int)
-    work["is_remote"] = work["remote_work"].isin(["Yes", "yes", "Hybrid", "hybrid"]).astype(int)
+    work["is_remote"] = work["remote_work"].str.lower().isin(["yes", "hybrid"]).astype(int)
 
     stats = CleaningStats(
         rows_in=rows_in,

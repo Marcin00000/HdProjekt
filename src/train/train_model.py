@@ -88,22 +88,23 @@ def _iter_param_grid(param_grid: dict[str, list[Any]]) -> list[dict[str, Any]]:
 
 def _fit_and_log_run(
     X_train: pd.DataFrame,
-    X_test: pd.DataFrame,
+    X_val: pd.DataFrame,
     y_train: pd.Series,
-    y_test: pd.Series,
+    y_val: pd.Series,
     hyperparams: dict[str, Any],
     defaults: dict[str, Any],
     preprocessor,
 ) -> tuple[XGBRegressor, dict[str, float], str, str]:
+    """Trenuje model i loguje do MLflow. Walidacja na zbiorze walidacyjnym (nie testowym)."""
     X_train_t = preprocessor.fit_transform(X_train)
-    X_test_t = preprocessor.transform(X_test)
+    X_val_t = preprocessor.transform(X_val)
 
     xgb_kw = _xgb_params(hyperparams, defaults)
     early_stop = int(defaults.get("early_stopping_rounds", 0))
     fit_kw: dict[str, Any] = {}
     if early_stop > 0:
         xgb_kw["early_stopping_rounds"] = early_stop
-        fit_kw["eval_set"] = [(X_test_t, y_test)]
+        fit_kw["eval_set"] = [(X_val_t, y_val)]
         fit_kw["verbose"] = False
 
     model = XGBRegressor(**xgb_kw)
@@ -115,8 +116,8 @@ def _fit_and_log_run(
 
     with mlflow.start_run(run_name=run_name):
         model.fit(X_train_t, y_train, **fit_kw)
-        pred = model.predict(X_test_t)
-        metrics = evaluate_model(y_test, pred)
+        pred = model.predict(X_val_t)
+        metrics = evaluate_model(y_val, pred)
 
         for key, value in hyperparams.items():
             mlflow.log_param(key, value)
@@ -136,7 +137,12 @@ def train_xgboost(
     register_model: bool = True,
     force_tuning: bool | None = None,
 ) -> dict[str, Any]:
-    """Trenuje model; opcjonalnie przeszukuje siatke hiperparametrow z params.yaml."""
+    """Trenuje model; opcjonalnie przeszukuje siatke hiperparametrow z params.yaml.
+
+    Podział danych: train (64%) / validation (16%) / test (20%).
+    - Validation: uzywany do early stopping i wyboru najlepszych hiperparametrow.
+    - Test: uzywany WYLACZNIE do koncowej ewaluacji najlepszego modelu.
+    """
     params = params or load_params()
     progress(2, "Przygotowanie danych treningowych...")
     configure_mlflow()
@@ -146,16 +152,26 @@ def train_xgboost(
     random_state = int(params.get("random_state", 42))
     defaults = {**params, "random_state": random_state}
 
-    X_train, X_test, y_train, y_test = prepare_train_test(
+    # Podział 3-stronny: train / val / test
+    # Najpierw wydzielamy test (20%), potem z reszty wydzielamy val (20% z 80% = 16% calości)
+    X_trainval, X_test, y_trainval, y_test = prepare_train_test(
         silver,
         test_size=float(params.get("test_size", 0.2)),
         random_state=random_state,
+    )
+    from sklearn.model_selection import train_test_split as _split
+
+    X_train, X_val, y_train, y_val = _split(
+        X_trainval, y_trainval, test_size=0.2, random_state=random_state,
     )
 
     from src.monitoring.baseline import save_training_baseline
 
     save_training_baseline(X_train, y_train)
-    log(f"Baseline monitoringu zapisany ({len(X_train):,} wierszy treningowych).")
+    log(
+        f"Baseline monitoringu zapisany ({len(X_train):,} wierszy treningowych). "
+        f"Walidacja: {len(X_val):,}, Test: {len(X_test):,}."
+    )
 
     preprocessor = build_preprocessor()
 
@@ -175,7 +191,7 @@ def train_xgboost(
             progress(pct, f"Strojenie — kombinacja {idx} z {total}")
             preproc = build_preprocessor()
             model, metrics, run_id, model_uri = _fit_and_log_run(
-                X_train, X_test, y_train, y_test, hyperparams, defaults, preproc
+                X_train, X_val, y_train, y_val, hyperparams, defaults, preproc
             )
             entry = {"run_id": run_id, "model_uri": model_uri, **hyperparams, **metrics}
             runs_summary.append(entry)
@@ -207,7 +223,7 @@ def train_xgboost(
         preproc = build_preprocessor()
         progress(50, "Trening szybki — trenowanie XGBoost")
         model, metrics, run_id, model_uri = _fit_and_log_run(
-            X_train, X_test, y_train, y_test, hyperparams, defaults, preproc
+            X_train, X_val, y_train, y_val, hyperparams, defaults, preproc
         )
         progress(85, "Trening szybki — zapis wynikow")
         entry = {"run_id": run_id, "model_uri": model_uri, **hyperparams, **metrics}
@@ -225,6 +241,18 @@ def train_xgboost(
             "metrics": metrics,
             "rmse": metrics["rmse"],
         }
+
+    # Końcowa ewaluacja najlepszego modelu na ZBIORZE TESTOWYM (nigdy nie widziany)
+    progress(90, "Ewaluacja koncowa na zbiorze testowym...")
+    X_test_t = best["preprocessor"].transform(X_test)
+    test_pred = best["model"].predict(X_test_t)
+    test_metrics = evaluate_model(y_test, test_pred)
+    best["metrics"] = test_metrics
+    log(
+        f"  Metryki TESTOWE (uczciwe): "
+        f"RMSE={test_metrics['rmse']:,.0f} ({test_metrics['rmse_pct_of_mean']:.1f}%) "
+        f"MAPE={test_metrics['mape_pct']:.2f}% R2={test_metrics['r2']:.4f}"
+    )
 
     progress(92, "Zapis modelu na dysk...")
     MODELS_DIR.mkdir(parents=True, exist_ok=True)

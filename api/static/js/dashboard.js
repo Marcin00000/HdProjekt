@@ -11,11 +11,10 @@ function destroyCharts() {
   });
 }
 
-// Paleta kolorow dla wykresow kategorycznych
+// Nowoczesna paleta premium z przejsciami
 const PALETTE = [
-  "#3b82f6", "#06b6d4", "#8b5cf6", "#10b981",
-  "#f59e0b", "#ef4444", "#ec4899", "#6366f1",
-  "#14b8a6", "#f97316", "#84cc16", "#a855f7",
+  "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b",
+  "#06b6d4", "#ec4899", "#ef4444", "#6366f1"
 ];
 
 function paletteColors(n) {
@@ -122,22 +121,46 @@ async function loadDashboard() {
       }
     }
 
+    // Tworzenie gradientu
+    const ctx = canvas.getContext("2d");
+    let bgColors = colors;
+    let hovColors = hoverColors;
+    
+    // Jesli kolor jest jeden i nie ma multicolor, zrobmy piekny poziomy/pionowy gradient
+    if (!multicolor && colors.length > 0) {
+      const grad = horizontal 
+        ? ctx.createLinearGradient(0, 0, canvas.parentElement.clientWidth, 0)
+        : ctx.createLinearGradient(0, 0, 0, canvas.parentElement.clientHeight);
+      grad.addColorStop(0, "#3b82f6");
+      grad.addColorStop(1, "#8b5cf6");
+      bgColors = grad;
+      
+      const gradHover = horizontal 
+        ? ctx.createLinearGradient(0, 0, canvas.parentElement.clientWidth, 0)
+        : ctx.createLinearGradient(0, 0, 0, canvas.parentElement.clientHeight);
+      gradHover.addColorStop(0, "#60a5fa");
+      gradHover.addColorStop(1, "#a78bfa");
+      hovColors = gradHover;
+    }
+
     chartInstances[id] = new Chart(canvas, {
       type: "bar",
       data: {
         labels,
         datasets: [{
           data: values,
-          backgroundColor: colors,
-          hoverBackgroundColor: hoverColors,
-          borderRadius: 4,
+          backgroundColor: bgColors,
+          hoverBackgroundColor: hovColors,
+          borderRadius: 6,
           borderSkipped: false,
+          barPercentage: 0.7,
         }],
       },
       options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         indexAxis: horizontal ? "y" : "x",
+        animation: { duration: 1200, easing: "easeOutQuart" },
         plugins: {
           legend: { display: false },
           tooltip: tooltipCfg || tooltip,

@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   btn.addEventListener("click", async () => {
     const scenario = document.getElementById("drift-scenario")?.value || "location_shift";
     const countRaw = document.getElementById("drift-count")?.value;
-    const count = countRaw ? parseInt(countRaw, 10) : 150;
+    const count = countRaw ? parseInt(countRaw, 10) : 5000;
 
     btn.disabled = true;
     document.querySelectorAll("[data-job]").forEach((b) => (b.disabled = true));
